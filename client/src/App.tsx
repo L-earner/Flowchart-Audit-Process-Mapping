@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ProcessGraph, ProcessNode, ViewMode, DiagramSummary } from "./types";
+import { MODELS, DEFAULT_MODEL_ID, providerFor } from "@shared/models.ts";
+import type { Health } from "./lib/api";
 import * as api from "./lib/api";
 import * as edit from "./lib/graphEdit";
 import { exportJson, exportPng } from "./lib/exportImage";
@@ -22,6 +24,8 @@ export default function App() {
   const [diagramId, setDiagramId] = useState<string | null>(null);
   const [diagrams, setDiagrams] = useState<DiagramSummary[]>([]);
   const [dirty, setDirty] = useState(false);
+  const [model, setModel] = useState<string>(DEFAULT_MODEL_ID);
+  const [healthInfo, setHealthInfo] = useState<Health | null>(null);
 
   // ----- live mode -----
   const liveSupported = isLiveSupported();
@@ -32,11 +36,22 @@ export default function App() {
   const refineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const graphRef = useRef<ProcessGraph | null>(null);
   graphRef.current = graph;
+  const modelRef = useRef<string>(model);
+  modelRef.current = model;
 
   const refreshList = useCallback(() => {
     api.listDiagrams().then(setDiagrams).catch(() => {});
   }, []);
   useEffect(refreshList, [refreshList]);
+  useEffect(() => {
+    api.health().then(setHealthInfo).catch(() => {});
+  }, []);
+
+  const provider = providerFor(model);
+  const keyMissing =
+    healthInfo != null &&
+    ((provider === "anthropic" && !healthInfo.hasAnthropicKey) ||
+      (provider === "openrouter" && !healthInfo.hasOpenRouterKey));
 
   function update(next: ProcessGraph) {
     setGraph(next);
@@ -47,7 +62,7 @@ export default function App() {
     setBusy(true);
     setError(null);
     try {
-      const g = await api.extract(opts);
+      const g = await api.extract({ ...opts, model });
       setGraph(g);
       setDiagramId(null);
       setDirty(true);
@@ -67,7 +82,7 @@ export default function App() {
       if (!chunk) return;
       pendingChunks.current = [];
       try {
-        const updated = await api.refine(graphRef.current, chunk);
+        const updated = await api.refine(graphRef.current, chunk, modelRef.current);
         setGraph(updated);
         setDirty(true);
       } catch (e) {
@@ -204,6 +219,41 @@ export default function App() {
 
       <div className="pf-body">
         <aside className="pf-sidebar">
+          <div className="pf-model">
+            <label htmlFor="pf-model-select">Model</label>
+            <select
+              id="pf-model-select"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+            >
+              <optgroup label="Anthropic (Claude)">
+                {MODELS.filter((m) => m.provider === "anthropic").map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="OpenRouter (open-source)">
+                {MODELS.filter((m) => m.provider === "openrouter").map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+            {keyMissing ? (
+              <p className="pf-key-warn">
+                ⚠ No {provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY"}{" "}
+                set — add it as a secret to use this model.
+              </p>
+            ) : (
+              <p className="pf-hint">
+                {provider === "openrouter"
+                  ? "Open-weight model via OpenRouter."
+                  : "Claude — schema-enforced extraction."}
+              </p>
+            )}
+          </div>
           <InputPanel
             busy={busy}
             onExtract={handleExtract}

@@ -1,0 +1,48 @@
+{
+  "viewMode": "swimlane",
+  "graph": {
+    "title": "Purchase-to-Pay (Demo)",
+    "summary": "Requisition through to payment, with key approval, validation, and three-way-match controls.",
+    "actors": [
+      { "id": "requester", "name": "Requester" },
+      { "id": "manager", "name": "Cost-Centre Manager" },
+      { "id": "procurement", "name": "Procurement" },
+      { "id": "erp", "name": "ERP System" },
+      { "id": "ap_clerk", "name": "AP Clerk" },
+      { "id": "payments", "name": "Payments Team" }
+    ],
+    "nodes": [
+      { "id": "start", "type": "start", "label": "Need identified", "actorId": null },
+      { "id": "raise_req", "type": "process", "label": "Raise purchase requisition", "actorId": "requester", "description": "Requester enters vendor, line items, quantities and cost centre in the ERP." },
+      { "id": "approve_req", "type": "control", "label": "Approve requisition", "actorId": "manager", "description": "Manager reviews requisition against department budget.", "control": { "controlType": "preventive", "riskAddressed": "Unauthorised or over-budget spend", "frequency": "Per requisition" } },
+      { "id": "approved?", "type": "decision", "label": "Approved?", "actorId": "manager" },
+      { "id": "amend", "type": "process", "label": "Amend or cancel", "actorId": "requester", "description": "Rejected requisition returns to requester." },
+      { "id": "create_po", "type": "process", "label": "Create & issue PO", "actorId": "procurement", "description": "Procurement converts the requisition into a purchase order and sends it to the vendor." },
+      { "id": "po_check", "type": "control", "label": "PO value check", "actorId": "erp", "description": "System verifies PO value is within the approved requisition amount before dispatch.", "control": { "controlType": "automated", "riskAddressed": "PO / requisition value mismatch", "frequency": "Per PO" } },
+      { "id": "goods_receipt", "type": "process", "label": "Record goods receipt", "actorId": "procurement", "description": "Receiving team records goods receipt in the ERP on delivery." },
+      { "id": "three_way", "type": "control", "label": "Three-way match", "actorId": "ap_clerk", "description": "AP clerk matches purchase order, goods receipt and invoice.", "control": { "controlType": "detective", "riskAddressed": "Paying for goods not received or at the wrong price", "frequency": "Per invoice" } },
+      { "id": "match?", "type": "decision", "label": "Match OK?", "actorId": "ap_clerk" },
+      { "id": "park_invoice", "type": "process", "label": "Park & investigate", "actorId": "procurement", "description": "Discrepant invoice is parked and sent to procurement to investigate." },
+      { "id": "post_invoice", "type": "process", "label": "Post invoice for payment", "actorId": "ap_clerk" },
+      { "id": "payment_run", "type": "system", "label": "Weekly payment run", "actorId": "payments", "description": "Payments team settles the invoice in the scheduled run." },
+      { "id": "end", "type": "end", "label": "Invoice paid", "actorId": null }
+    ],
+    "edges": [
+      { "id": "e1", "source": "start", "target": "raise_req" },
+      { "id": "e2", "source": "raise_req", "target": "approve_req" },
+      { "id": "e3", "source": "approve_req", "target": "approved?" },
+      { "id": "e4", "source": "approved?", "target": "amend", "label": "rejected" },
+      { "id": "e5", "source": "amend", "target": "raise_req", "label": "resubmit" },
+      { "id": "e6", "source": "approved?", "target": "create_po", "label": "approved" },
+      { "id": "e7", "source": "create_po", "target": "po_check" },
+      { "id": "e8", "source": "po_check", "target": "goods_receipt" },
+      { "id": "e9", "source": "goods_receipt", "target": "three_way" },
+      { "id": "e10", "source": "three_way", "target": "match?" },
+      { "id": "e11", "source": "match?", "target": "park_invoice", "label": "no" },
+      { "id": "e12", "source": "park_invoice", "target": "three_way", "label": "re-check" },
+      { "id": "e13", "source": "match?", "target": "post_invoice", "label": "yes" },
+      { "id": "e14", "source": "post_invoice", "target": "payment_run" },
+      { "id": "e15", "source": "payment_run", "target": "end" }
+    ]
+  }
+}

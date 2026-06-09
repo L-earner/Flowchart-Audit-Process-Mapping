@@ -22,8 +22,15 @@ Replit run button uses `npm run build && npm start` (single port 3001 → extern
 
 ## Required configuration
 
-`ANTHROPIC_API_KEY` must be set (Replit secret or `.env`) or all extraction fails.
-`/api/health` reports `hasApiKey`. See `.env.example`.
+Extraction runs through a **selectable model** (picker in the UI sidebar). You need a key
+for whichever provider the chosen model belongs to:
+
+- `ANTHROPIC_API_KEY` — for Claude models (`claude-opus-4-8`, `claude-sonnet-4-6`).
+- `OPENROUTER_API_KEY` — for open-weight models via OpenRouter (DeepSeek, Llama, Qwen, Mistral).
+
+Set as Replit secrets or in `.env` (see `.env.example`). `/api/health` reports
+`hasAnthropicKey` / `hasOpenRouterKey`. `LLM_MODEL` sets the default model when the request
+doesn't specify one.
 
 ## Architecture — the one thing to understand first
 
@@ -40,12 +47,26 @@ The schema and the TypeScript types live in the same file deliberately, so they 
 the verify script.
 
 ### Server (`server/`, Express + tsx, ESM `.ts` imports)
-- `lib/anthropic.ts` — `extractGraph(inputs)` and `refineGraph(graph, chunk)`. Model
-  `claude-opus-4-8`, adaptive thinking, structured output via `GRAPH_FORMAT`. The system
-  prompt drives audit-grade extraction (actors → lanes, decisions, and **control points
-  with the risk each addresses**).
-- `lib/documents.ts` — maps an uploaded file to an extraction input: PDF → document block,
-  `.docx` → text via `mammoth`, text/* → text, images → vision block.
+
+**Pluggable LLM providers.** The model id selects the provider (`shared/models.ts` →
+`providerFor`). All extraction goes through `lib/llm.ts` (`extractGraph(inputs, modelId?)`,
+`refineGraph(graph, chunk, modelId?)`), which dispatches to:
+- `lib/providers/anthropic.ts` — Anthropic SDK, adaptive thinking, **schema-enforced**
+  structured output (`output_config.format`). Supports text, PDF, and images.
+- `lib/providers/openrouter.ts` — OpenAI-compatible `chat/completions` over `fetch`. Open
+  models can't enforce a schema, so the schema is embedded in the prompt
+  (`SCHEMA_INSTRUCTION`) + `response_format: json_object`, and output is parsed leniently.
+  Text always; images only on vision-capable models; PDFs are rejected with a clear message.
+
+Shared pieces: `lib/inputs.ts` (`ExtractInput`), `lib/prompts.ts` (system prompt + refine
+addendum + schema instruction), `lib/parse.ts` (`parseGraphJson` — lenient parse, strips
+code fences / extracts the outermost `{…}`, then `validateProcessGraph`).
+
+The audit-grade system prompt (actors → lanes, decisions, **control points with the risk
+each addresses**) lives in `lib/prompts.ts` and is shared by both providers.
+
+- `lib/documents.ts` — maps an uploaded file to an `ExtractInput`: PDF → document block,
+  `.docx` → text via `mammoth`, text/* → text, images → image block.
 - `routes/extract.ts` — `POST /api/extract` (multipart: `text` + `files`), `POST /api/extract/refine` (JSON, live mode).
 - `routes/diagrams.ts` + `db.ts` — diagram CRUD over `better-sqlite3` (`diagrams.db`, gitignored).
 - `index.ts` — wires routes, serves `dist/` in production.
@@ -72,3 +93,8 @@ the verify script.
 - `better-sqlite3` is a native module; it built cleanly on Replit's Node 20.
 - The Anthropic SDK must stay recent enough to type adaptive thinking + `output_config`
   (currently `^0.102.0`); older majors (≤0.40) will not typecheck.
+- To add/replace an OpenRouter model, edit `shared/models.ts` (`MODELS`) — set `vision: true`
+  only if the model accepts images. The client picker and server routing both read this list.
+- Open models vary in JSON reliability; `parseGraphJson` is deliberately lenient. If a
+  particular model returns malformed graphs often, prefer one known to support structured
+  output, or switch to a Claude model.

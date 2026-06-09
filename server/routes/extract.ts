@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
-import { extractGraph, refineGraph, type ExtractInput } from "../lib/anthropic.ts";
+import { extractGraph, refineGraph } from "../lib/llm.ts";
+import type { ExtractInput } from "../lib/inputs.ts";
 import { fileToInput } from "../lib/documents.ts";
 import { validateProcessGraph, type ProcessGraph } from "@shared/processGraph.ts";
 
@@ -34,7 +35,8 @@ extractRouter.post("/", upload.array("files"), async (req, res) => {
         .json({ error: "Provide some text or at least one file to extract from." });
     }
 
-    const graph = await extractGraph(inputs);
+    const model = typeof req.body?.model === "string" ? req.body.model : undefined;
+    const graph = await extractGraph(inputs, model);
     res.json({ graph });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -48,9 +50,10 @@ extractRouter.post("/", upload.array("files"), async (req, res) => {
  */
 extractRouter.post("/refine", async (req, res) => {
   try {
-    const { graph, transcriptChunk } = req.body as {
+    const { graph, transcriptChunk, model } = req.body as {
       graph?: ProcessGraph;
       transcriptChunk?: string;
+      model?: string;
     };
     if (!transcriptChunk || !transcriptChunk.trim()) {
       return res.status(400).json({ error: "transcriptChunk is required." });
@@ -66,7 +69,7 @@ extractRouter.post("/refine", async (req, res) => {
 
     const base: ProcessGraph =
       graph ?? { title: "Untitled process", actors: [], nodes: [], edges: [] };
-    const updated = await refineGraph(base, transcriptChunk);
+    const updated = await refineGraph(base, transcriptChunk, model);
     res.json({ graph: updated });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });

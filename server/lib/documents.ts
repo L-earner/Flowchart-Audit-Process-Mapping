@@ -1,5 +1,5 @@
 import mammoth from "mammoth";
-import type { ExtractInput } from "./anthropic.ts";
+import type { ExtractInput } from "./inputs.ts";
 
 const IMAGE_TYPES = new Set([
   "image/jpeg",

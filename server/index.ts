@@ -12,7 +12,11 @@ const app = express();
 app.use(express.json({ limit: "50mb" }));
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, hasApiKey: Boolean(process.env.ANTHROPIC_API_KEY) });
+  res.json({
+    ok: true,
+    hasAnthropicKey: Boolean(process.env.ANTHROPIC_API_KEY),
+    hasOpenRouterKey: Boolean(process.env.OPENROUTER_API_KEY),
+  });
 });
 
 app.use("/api/extract", extractRouter);
@@ -27,9 +31,9 @@ if (existsSync(distDir)) {
 
 app.listen(PORT, () => {
   console.log(`[server] listening on http://localhost:${PORT}`);
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENROUTER_API_KEY) {
     console.warn(
-      "[server] WARNING: ANTHROPIC_API_KEY is not set — extraction will fail until it is.",
+      "[server] WARNING: no ANTHROPIC_API_KEY or OPENROUTER_API_KEY set — extraction will fail until one is.",
     );
   }
 });

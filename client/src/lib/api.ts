@@ -13,9 +13,11 @@ async function asJson<T>(res: Response): Promise<T> {
 export async function extract(opts: {
   text?: string;
   files?: File[];
+  model?: string;
 }): Promise<ProcessGraph> {
   const form = new FormData();
   if (opts.text) form.append("text", opts.text);
+  if (opts.model) form.append("model", opts.model);
   for (const f of opts.files ?? []) form.append("files", f);
   const res = await fetch("/api/extract", { method: "POST", body: form });
   return (await asJson<{ graph: ProcessGraph }>(res)).graph;
@@ -25,13 +27,25 @@ export async function extract(opts: {
 export async function refine(
   graph: ProcessGraph | null,
   transcriptChunk: string,
+  model?: string,
 ): Promise<ProcessGraph> {
   const res = await fetch("/api/extract/refine", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ graph, transcriptChunk }),
+    body: JSON.stringify({ graph, transcriptChunk, model }),
   });
   return (await asJson<{ graph: ProcessGraph }>(res)).graph;
+}
+
+export interface Health {
+  ok: boolean;
+  hasAnthropicKey: boolean;
+  hasOpenRouterKey: boolean;
+}
+
+export async function health(): Promise<Health> {
+  const res = await fetch("/api/health");
+  return asJson<Health>(res);
 }
 
 export async function listDiagrams(): Promise<DiagramSummary[]> {

@@ -3,14 +3,19 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { extractGraph } from "../server/lib/anthropic.ts";
+import { extractGraph } from "../server/lib/llm.ts";
 import { validateProcessGraph } from "../shared/processGraph.ts";
+import { DEFAULT_MODEL_ID, providerFor } from "../shared/models.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 async function main() {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.error("✗ ANTHROPIC_API_KEY is not set. Set it and re-run `npm run verify`.");
+  // Model can be overridden: `LLM_MODEL=deepseek/deepseek-chat npm run verify`.
+  const model = process.env.LLM_MODEL ?? DEFAULT_MODEL_ID;
+  const provider = providerFor(model);
+  const needKey = provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY";
+  if (!process.env[needKey]) {
+    console.error(`✗ ${needKey} is not set (needed for model "${model}"). Set it and re-run.`);
     process.exit(2);
   }
 
@@ -19,8 +24,8 @@ async function main() {
     "utf-8",
   );
 
-  console.log("→ Extracting process graph from the P2P fixture transcript…");
-  const graph = await extractGraph([{ kind: "text", text: transcript }]);
+  console.log(`→ Extracting with ${provider} model "${model}"…`);
+  const graph = await extractGraph([{ kind: "text", text: transcript }], model);
 
   const { ok, errors } = validateProcessGraph(graph);
   const checks: Array<[string, boolean]> = [
