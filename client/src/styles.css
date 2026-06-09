@@ -1,0 +1,452 @@
+:root {
+  --bg: #f7f8fa;
+  --panel: #ffffff;
+  --border: #e2e8f0;
+  --ink: #1e293b;
+  --muted: #64748b;
+  --brand: #2563eb;
+  --brand-ink: #1d4ed8;
+  --control: #b45309;
+  --control-bg: #fffbeb;
+  --danger: #dc2626;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.pf-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ---- header ---- */
+.pf-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.pf-brand {
+  font-weight: 700;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.pf-title-input {
+  flex: 1;
+  max-width: 420px;
+  font-size: 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.pf-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pf-header-actions button {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.pf-header-actions button:hover {
+  background: #f1f5f9;
+}
+.pf-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.pf-toggle button {
+  border: none;
+  border-radius: 0;
+}
+.pf-toggle button.active {
+  background: var(--brand);
+  color: #fff;
+}
+
+/* ---- layout ---- */
+.pf-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.pf-sidebar {
+  width: 320px;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  overflow-y: auto;
+  padding: 14px;
+}
+.pf-main {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+.pf-rightbar {
+  width: 300px;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.pf-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--muted);
+  padding: 40px;
+  text-align: center;
+}
+.pf-empty p {
+  max-width: 420px;
+  line-height: 1.6;
+}
+
+.pf-error {
+  background: #fef2f2;
+  color: var(--danger);
+  border-bottom: 1px solid #fecaca;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ---- input panel ---- */
+.pf-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.pf-tabs button {
+  flex: 1;
+  padding: 7px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.pf-tabs button.active {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+.pf-tabpane textarea,
+.pf-tabpane input[type="file"] {
+  width: 100%;
+  font: inherit;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+.pf-primary {
+  width: 100%;
+  padding: 9px;
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.pf-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.pf-danger {
+  width: 100%;
+  padding: 9px;
+  background: var(--danger);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.pf-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 4px 0 8px;
+  line-height: 1.5;
+}
+.pf-muted {
+  color: var(--muted);
+}
+.pf-filelist {
+  font-size: 12px;
+  padding-left: 18px;
+  margin: 4px 0 8px;
+}
+.pf-transcript {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.pf-saved {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.pf-saved h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.pf-saved ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-saved li button {
+  width: 100%;
+  text-align: left;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  margin-bottom: 5px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.pf-saved li button.active {
+  border-color: var(--brand);
+  background: #eff6ff;
+}
+
+/* ---- right bar / inspector ---- */
+.pf-add h4,
+.pf-inspector h3,
+.pf-control-edit h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.pf-add-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.pf-add-buttons button {
+  padding: 7px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.pf-inspector {
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.pf-inspector-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.pf-inspector label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 10px 0 3px;
+}
+.pf-inspector input,
+.pf-inspector select,
+.pf-inspector textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.pf-control-edit {
+  margin-top: 14px;
+  padding: 10px;
+  background: var(--control-bg);
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+}
+.pf-link-danger {
+  border: none;
+  background: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* ---- canvas ---- */
+.pf-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* ---- nodes ---- */
+.pf-node {
+  background: #fff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 12px;
+  width: 180px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  font-size: 13px;
+}
+.pf-step {
+  border-color: #93c5fd;
+}
+.pf-system {
+  border-color: #c4b5fd;
+  background: #faf5ff;
+}
+.pf-label {
+  font-weight: 600;
+  line-height: 1.3;
+}
+.pf-actor {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.pf-actor-below {
+  text-align: center;
+}
+.pf-selected {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.pf-terminal {
+  border-radius: 28px;
+  text-align: center;
+  width: 130px;
+  background: #f1f5f9;
+}
+.pf-terminal-start {
+  border-color: #34d399;
+  background: #ecfdf5;
+}
+.pf-terminal-end {
+  border-color: #f87171;
+  background: #fef2f2;
+}
+
+.pf-decision-wrap {
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.pf-decision {
+  width: 110px;
+  height: 110px;
+  transform: rotate(45deg);
+  background: #fffbeb;
+  border: 1.5px solid #fbbf24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+.pf-decision .pf-label {
+  transform: rotate(-45deg);
+  text-align: center;
+  font-size: 12px;
+  width: 130px;
+  padding: 0 4px;
+}
+
+.pf-control {
+  border: 2px solid var(--control);
+  background: var(--control-bg);
+  width: 200px;
+}
+.pf-control-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--control);
+  margin-bottom: 3px;
+}
+.pf-control-meta {
+  margin-top: 6px;
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.pf-tag {
+  font-size: 10px;
+  background: #fde68a;
+  color: #78350f;
+  padding: 1px 6px;
+  border-radius: 10px;
+}
+.pf-tag-muted {
+  background: #e2e8f0;
+  color: var(--muted);
+}
+.pf-risk {
+  font-size: 11px;
+  color: #92400e;
+  margin-top: 5px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* ---- swimlanes (background nodes) ---- */
+.pf-lane-node {
+  background: rgba(241, 245, 249, 0.5);
+  border-top: 1px dashed #cbd5e1;
+  border-bottom: 1px dashed #cbd5e1;
+  pointer-events: none;
+}
+.pf-lane-node.pf-lane-alt {
+  background: rgba(226, 232, 240, 0.45);
+}
+.pf-lane-label {
+  position: sticky;
+  left: 0;
+  width: 150px;
+  padding: 8px 10px;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

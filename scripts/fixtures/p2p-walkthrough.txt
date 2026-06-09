@@ -1,0 +1,26 @@
+Purchase-to-Pay walkthrough — notes from meeting with AP and Procurement.
+
+The process kicks off when a department requester raises a purchase requisition in
+the ERP. The requester fills in the vendor, line items, quantities and cost centre.
+
+The requisition then routes to the cost-centre manager for approval. The manager
+reviews the requisition against the department budget. This approval is a key control
+— it's a preventive, manual control performed on every requisition to prevent
+unauthorised or over-budget spend. If the manager rejects it, the requisition goes
+back to the requester to amend or cancel. If approved, it moves on.
+
+Once approved, the procurement team converts the requisition into a purchase order
+and issues it to the vendor. The system automatically checks that the PO value is
+within the approved requisition amount before it can be dispatched — that's an
+automated preventive control against PO/requisition mismatch.
+
+The vendor delivers the goods and the receiving team records a goods receipt in the
+ERP. When the vendor invoice arrives, an AP clerk performs a three-way match between
+the purchase order, the goods receipt and the invoice. The three-way match is a
+detective control, run per invoice, to catch quantity or price discrepancies and
+prevent paying for goods not received.
+
+If the three-way match fails, the invoice is parked and sent to procurement to
+investigate the discrepancy. If it matches, the AP clerk posts the invoice for
+payment. Finally, the payments team runs the weekly payment run to settle the
+invoice, and the process ends.
