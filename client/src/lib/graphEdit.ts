@@ -4,6 +4,7 @@ import type {
   ProcessNode,
   NodeType,
   ControlInfo,
+  Actor,
 } from "../types";
 
 function uid(prefix: string): string {
@@ -138,4 +139,64 @@ export function deleteEdge(graph: ProcessGraph, edgeId: string): ProcessGraph {
 
 export function setTitle(graph: ProcessGraph, title: string): ProcessGraph {
   return { ...graph, title };
+}
+
+export function addActor(
+  graph: ProcessGraph,
+  name = "New actor",
+): { graph: ProcessGraph; actorId: string } {
+  const id = uid("a");
+  return {
+    graph: { ...graph, actors: [...graph.actors, { id, name }] },
+    actorId: id,
+  };
+}
+
+export function updateActor(
+  graph: ProcessGraph,
+  actorId: string,
+  patch: Partial<Pick<Actor, "name" | "description">>,
+): ProcessGraph {
+  return {
+    ...graph,
+    actors: graph.actors.map((a) =>
+      a.id === actorId ? { ...a, ...patch } : a,
+    ),
+  };
+}
+
+/** Move an actor (and therefore its swimlane) up (-1) or down (+1) in order. */
+export function moveActor(
+  graph: ProcessGraph,
+  actorId: string,
+  dir: -1 | 1,
+): ProcessGraph {
+  const index = graph.actors.findIndex((a) => a.id === actorId);
+  if (index === -1) return graph;
+  const target = index + dir;
+  if (target < 0 || target >= graph.actors.length) return graph;
+  const actors = [...graph.actors];
+  [actors[index], actors[target]] = [actors[target], actors[index]];
+  return { ...graph, actors };
+}
+
+/**
+ * Delete an actor, reassigning its nodes to the first remaining actor so the
+ * graph stays valid (process nodes require a real actorId). No-op if it is the
+ * only actor and any non-terminal node would be orphaned.
+ */
+export function deleteActor(graph: ProcessGraph, actorId: string): ProcessGraph {
+  const remaining = graph.actors.filter((a) => a.id !== actorId);
+  const ownsNonTerminal = graph.nodes.some(
+    (n) => n.actorId === actorId && n.type !== "start" && n.type !== "end",
+  );
+  if (ownsNonTerminal && remaining.length === 0) return graph;
+  const fallback = remaining[0]?.id ?? null;
+  return {
+    ...graph,
+    actors: remaining,
+    nodes: graph.nodes.map((n) =>
+      n.actorId === actorId ? { ...n, actorId: fallback } : n,
+    ),
+  };
 }

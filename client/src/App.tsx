@@ -26,7 +26,9 @@ import InputPanel from "./components/InputPanel";
 import NodeInspector from "./components/NodeInspector";
 import EdgeInspector from "./components/EdgeInspector";
 import RefinePanel from "./components/RefinePanel";
+import ActorPanel from "./components/ActorPanel";
 import { assessGraph } from "./lib/graphQuality";
+import { summarizeChange } from "./lib/graphDiff";
 import "./styles.css";
 
 interface UndoEntry {
@@ -48,6 +50,8 @@ export default function App() {
   const [diagrams, setDiagrams] = useState<DiagramSummary[]>([]);
   const [dirty, setDirty] = useState(false);
   const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoEntry[]>([]);
+  const [refineNote, setRefineNote] = useState<string | null>(null);
   const [model, setModel] = useState<string>(() => {
     const stored = window.localStorage.getItem("pf-model");
     return stored && modelInfo(stored) ? stored : DEFAULT_MODEL_ID;
@@ -121,6 +125,7 @@ export default function App() {
           dirty: dirtyRef.current,
         },
       ]);
+      setRedoStack([]); // a fresh edit invalidates the redo branch
     }
     setGraph(next);
     setDirty(true);
@@ -130,6 +135,17 @@ export default function App() {
     if (busy) return;
     const previous = undoStack.at(-1);
     if (!previous) return;
+    const current = graphRef.current;
+    if (current) {
+      setRedoStack((entries) => [
+        ...entries.slice(-(MAX_UNDO_ENTRIES - 1)),
+        {
+          graph: current,
+          viewMode: viewModeRef.current,
+          dirty: dirtyRef.current,
+        },
+      ]);
+    }
     setGraph(previous.graph);
     setViewMode(previous.viewMode);
     setDirty(previous.dirty);
@@ -138,22 +154,46 @@ export default function App() {
     setUndoStack((entries) => entries.slice(0, -1));
   }, [busy, undoStack]);
 
+  const handleRedo = useCallback(() => {
+    if (busy) return;
+    const nextState = redoStack.at(-1);
+    if (!nextState) return;
+    const current = graphRef.current;
+    if (current) {
+      setUndoStack((entries) => [
+        ...entries.slice(-(MAX_UNDO_ENTRIES - 1)),
+        {
+          graph: current,
+          viewMode: viewModeRef.current,
+          dirty: dirtyRef.current,
+        },
+      ]);
+    }
+    setGraph(nextState.graph);
+    setViewMode(nextState.viewMode);
+    setDirty(nextState.dirty);
+    setSelectedId(null);
+    setSelectedEdgeId(null);
+    setRedoStack((entries) => entries.slice(0, -1));
+  }, [busy, redoStack]);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (
-        (event.ctrlKey || event.metaKey) &&
-        !event.shiftKey &&
-        event.key.toLowerCase() === "z" &&
-        !busy &&
-        undoStack.length > 0
-      ) {
+      if (busy || !(event.ctrlKey || event.metaKey)) return;
+      const key = event.key.toLowerCase();
+      const isRedo =
+        (key === "z" && event.shiftKey) || (key === "y" && !event.shiftKey);
+      if (isRedo && redoStack.length > 0) {
+        event.preventDefault();
+        handleRedo();
+      } else if (key === "z" && !event.shiftKey && undoStack.length > 0) {
         event.preventDefault();
         handleUndo();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [busy, handleUndo, undoStack.length]);
+  }, [busy, handleUndo, handleRedo, undoStack.length, redoStack.length]);
 
   async function handleExtract(opts: { text?: string; files?: File[] }) {
     setBusy(true);
@@ -162,6 +202,8 @@ export default function App() {
       const g = await api.extract({ ...opts, model });
       setGraph(g);
       setUndoStack([]);
+      setRedoStack([]);
+      setRefineNote(null);
       setDiagramId(null);
       setDirty(true);
       setSelectedId(null);
@@ -179,7 +221,9 @@ export default function App() {
     setError(null);
     try {
       const updated = await api.refine(graph, instruction, model);
+      const summary = summarizeChange(graph, updated);
       update(updated);
+      setRefineNote(`AI update: ${summary} — Undo (Ctrl/Cmd+Z) to revert.`);
       setSelectedId(null);
       setSelectedEdgeId(null);
       return true;
@@ -290,6 +334,8 @@ export default function App() {
       const d = await api.loadDiagram(id);
       setGraph(d.graph);
       setUndoStack([]);
+      setRedoStack([]);
+      setRefineNote(null);
       setViewMode(d.viewMode);
       setDiagramId(d.id);
       setDirty(false);
@@ -308,6 +354,8 @@ export default function App() {
     }
     setGraph(null);
     setUndoStack([]);
+    setRedoStack([]);
+    setRefineNote(null);
     setDiagramId(null);
     setSelectedId(null);
     setSelectedEdgeId(null);
@@ -326,6 +374,8 @@ export default function App() {
       if (id === diagramId) {
         setGraph(null);
         setUndoStack([]);
+        setRedoStack([]);
+        setRefineNote(null);
         setDiagramId(null);
         setSelectedId(null);
         setSelectedEdgeId(null);
@@ -383,6 +433,13 @@ export default function App() {
               >
                 Undo
               </button>
+              <button
+                onClick={handleRedo}
+                disabled={busy || redoStack.length === 0}
+                title="Redo (Ctrl/Cmd+Shift+Z)"
+              >
+                Redo
+              </button>
               <button onClick={handleSave} disabled={busy}>
                 {diagramId ? (dirty ? "Save*" : "Saved") : "Save"}
               </button>
@@ -399,6 +456,12 @@ export default function App() {
       {error && (
         <div className="pf-error" onClick={() => setError(null)}>
           {error} <span className="pf-muted">(click to dismiss)</span>
+        </div>
+      )}
+
+      {refineNote && (
+        <div className="pf-refine-note" onClick={() => setRefineNote(null)}>
+          {refineNote} <span className="pf-muted">(click to dismiss)</span>
         </div>
       )}
 
@@ -507,6 +570,24 @@ export default function App() {
               onSelectEdge={setSelectedEdgeId}
               onNodePositions={(pos) => update(edit.applyPositions(graph, pos))}
               onConnect={(s, t) => update(edit.addEdge(graph, s, t))}
+              onReconnectEdge={(edgeId, s, t) => {
+                if (
+                  graph.edges.some(
+                    (e) => e.id !== edgeId && e.source === s && e.target === t,
+                  )
+                ) {
+                  return; // would duplicate an existing connection
+                }
+                update(edit.updateEdge(graph, edgeId, { source: s, target: t }));
+              }}
+              onRenameNode={(nodeId, label) =>
+                update(edit.updateNode(graph, nodeId, { label }))
+              }
+              onReassignActor={(nodeId, actorId) =>
+                update(
+                  edit.updateNode(graph, nodeId, { actorId, position: undefined }),
+                )
+              }
               onAddNode={(type, actorId, position, connectFrom) => {
                 const { graph: withNode, nodeId } = edit.addNode(
                   graph,
@@ -568,6 +649,22 @@ export default function App() {
                 )}
               </section>
             )}
+            <ActorPanel
+              graph={graph}
+              onRename={(actorId, name) =>
+                update(edit.updateActor(graph, actorId, { name }))
+              }
+              onMove={(actorId, dir) =>
+                update(edit.clearPositions(edit.moveActor(graph, actorId, dir)))
+              }
+              onDelete={(actorId) =>
+                update(edit.clearPositions(edit.deleteActor(graph, actorId)))
+              }
+              onAdd={() => {
+                const { graph: g } = edit.addActor(graph);
+                update(edit.clearPositions(g));
+              }}
+            />
             <div className="pf-add">
               <h4>Add step</h4>
               <div className="pf-add-buttons">
@@ -611,9 +708,28 @@ export default function App() {
               <EdgeInspector
                 graph={graph}
                 edge={selectedEdge}
-                onPatch={(patch) =>
-                  update(edit.updateEdge(graph, selectedEdge.id, patch))
-                }
+                onPatch={(patch) => {
+                  const nextSource = patch.source ?? selectedEdge.source;
+                  const nextTarget = patch.target ?? selectedEdge.target;
+                  if (patch.source || patch.target) {
+                    if (nextSource === nextTarget) {
+                      setError("A connection can't start and end on the same step.");
+                      return;
+                    }
+                    if (
+                      graph.edges.some(
+                        (e) =>
+                          e.id !== selectedEdge.id &&
+                          e.source === nextSource &&
+                          e.target === nextTarget,
+                      )
+                    ) {
+                      setError("That connection already exists.");
+                      return;
+                    }
+                  }
+                  update(edit.updateEdge(graph, selectedEdge.id, patch));
+                }}
                 onDelete={() => {
                   update(edit.deleteEdge(graph, selectedEdge.id));
                   setSelectedEdgeId(null);

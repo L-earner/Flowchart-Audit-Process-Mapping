@@ -9,7 +9,9 @@ import {
   useEdgesState,
   addEdge,
   applyNodeChanges,
+  reconnectEdge,
   type Connection,
+  type Edge,
   type NodeChange,
   type ReactFlowInstance,
 } from "@xyflow/react";
@@ -17,6 +19,7 @@ import "@xyflow/react/dist/style.css";
 import type { NodeType, ProcessGraph, ViewMode } from "../types";
 import { layout, type RFNode } from "../lib/layout";
 import { nodeTypes } from "./nodes";
+import { NodeEditContext } from "./nodes/nodeEditContext";
 
 interface CanvasProps {
   graph: ProcessGraph;
@@ -27,6 +30,9 @@ interface CanvasProps {
   /** Persist node position edits back up to the parent graph. */
   onNodePositions: (positions: Record<string, { x: number; y: number }>) => void;
   onConnect: (source: string, target: string) => void;
+  onReconnectEdge: (edgeId: string, source: string, target: string) => void;
+  onRenameNode: (nodeId: string, label: string) => void;
+  onReassignActor: (nodeId: string, actorId: string | null) => void;
   onAddNode: (
     type: NodeType,
     actorId: string | null,
@@ -44,6 +50,9 @@ export default function Canvas({
   onSelectEdge,
   onNodePositions,
   onConnect,
+  onReconnectEdge,
+  onRenameNode,
+  onReassignActor,
   onAddNode,
   onDeleteElements,
 }: CanvasProps) {
@@ -76,6 +85,40 @@ export default function Canvas({
       (c) => c.type === "position" && c.dragging === false,
     );
     if (dragEnd) {
+      // In swimlane view, dropping a node into a different lane band reassigns
+      // its actor instead of persisting the raw position. Only the dragged node
+      // moves in a single drag, so we hand off the reassignment (which drops the
+      // node's position so layout re-snaps it) and skip the position persist —
+      // calling both would race on the same stale graph and clobber the actor
+      // change.
+      if (viewMode === "swimlane") {
+        const moved = changes.find(
+          (c) => c.type === "position" && c.dragging === false,
+        );
+        const movedId = moved && "id" in moved ? moved.id : undefined;
+        const movedNode = movedId
+          ? nextNodes.find((n) => n.id === movedId)
+          : undefined;
+        if (movedNode && !movedNode.id.startsWith("lane__")) {
+          const current = graph.nodes.find((n) => n.id === movedNode.id);
+          // start/end markers live in the unassigned lane — don't reassign them.
+          if (current && current.type !== "start" && current.type !== "end") {
+            const centerY = movedNode.position.y + 40;
+            const lane = laid.lanes.find(
+              (candidate) =>
+                centerY >= candidate.y &&
+                centerY < candidate.y + candidate.height,
+            );
+            const targetActor =
+              lane && lane.actorId !== "__unassigned__" ? lane.actorId : null;
+            if (targetActor && targetActor !== current.actorId) {
+              onReassignActor(movedNode.id, targetActor);
+              return;
+            }
+          }
+        }
+      }
+
       const positions: Record<string, { x: number; y: number }> = {};
       for (const n of nextNodes) {
         if (n.id.startsWith("lane__")) continue; // skip background lanes
@@ -89,6 +132,12 @@ export default function Canvas({
     if (!c.source || !c.target) return;
     setEdges((eds) => addEdge({ ...c, type: "smoothstep" }, eds));
     onConnect(c.source, c.target);
+  };
+
+  const handleReconnect = (oldEdge: Edge, c: Connection) => {
+    if (!c.source || !c.target) return;
+    setEdges((eds) => reconnectEdge(oldEdge, c, eds));
+    onReconnectEdge(oldEdge.id, c.source, c.target);
   };
 
   const addAfterSelected = (type: NodeType) => {
@@ -142,6 +191,7 @@ export default function Canvas({
   };
 
   return (
+    <NodeEditContext.Provider value={{ renameNode: onRenameNode }}>
     <div className="pf-canvas" onDoubleClick={handleCanvasDoubleClick}>
       <ReactFlow
         nodes={nodes}
@@ -150,6 +200,7 @@ export default function Canvas({
         onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={handleConnect}
+        onReconnect={handleReconnect}
         onNodeClick={(_, n) => {
           if (n.id.startsWith("lane__")) return;
           onSelectEdge(null);
@@ -233,5 +284,6 @@ export default function Canvas({
         </Panel>
       </ReactFlow>
     </div>
+    </NodeEditContext.Provider>
   );
 }

@@ -1,5 +1,5 @@
 import dagre from "@dagrejs/dagre";
-import type { Edge, Node } from "@xyflow/react";
+import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import type { ProcessGraph, ProcessNode, ViewMode } from "../types";
 
 export interface ProcessNodeData extends Record<string, unknown> {
@@ -53,16 +53,60 @@ function rfNodeType(t: ProcessNode["type"]): string {
   return "step";
 }
 
-function buildEdges(graph: ProcessGraph): RFEdge[] {
+type Center = { x: number; y: number };
+
+/** Centre point of each laid-out node, keyed by id (lanes excluded). */
+function centersFromNodes(nodes: RFNode[]): Map<string, Center> {
+  const centers = new Map<string, Center>();
+  for (const n of nodes) {
+    if (n.id.startsWith("lane__")) continue;
+    const { width, height } = sizeFor(n.data.node.type);
+    centers.set(n.id, {
+      x: n.position.x + width / 2,
+      y: n.position.y + height / 2,
+    });
+  }
+  return centers;
+}
+
+/**
+ * Pick which of the four side-dots an edge attaches to, based on where the
+ * target sits relative to the source: side dots (right→left) when it is mostly
+ * beside, top/bottom dots otherwise. Handle ids match those in nodes/index.tsx
+ * (right source = "r", left target = "l"; top/bottom have no id).
+ */
+function pickHandles(
+  source: Center | undefined,
+  target: Center | undefined,
+): { sourceHandle?: string; targetHandle?: string } {
+  if (!source || !target) return {};
+  const dx = target.x - source.x;
+  const dy = target.y - source.y;
+  if (Math.abs(dx) > Math.abs(dy) && dx > 0) {
+    return { sourceHandle: "r", targetHandle: "l" };
+  }
+  return {}; // default: exit bottom, enter top
+}
+
+function buildEdges(graph: ProcessGraph, centers: Map<string, Center>): RFEdge[] {
   return graph.edges.map((e) => ({
     id: e.id,
     source: e.source,
     target: e.target,
     label: e.label,
     type: "smoothstep",
+    reconnectable: true,
+    interactionWidth: 28,
+    ...pickHandles(centers.get(e.source), centers.get(e.target)),
+    style: { strokeWidth: 1.6, stroke: "#64748b" },
     labelBgPadding: [6, 3] as [number, number],
-    labelBgStyle: { fill: "#fff", fillOpacity: 0.85 },
-    markerEnd: { type: "arrowclosed" as never },
+    labelBgStyle: { fill: "#fff", fillOpacity: 0.9 },
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 24,
+      height: 24,
+      color: "#64748b",
+    },
   }));
 }
 
@@ -149,7 +193,7 @@ function layoutFlowchart(graph: ProcessGraph): LayoutResult {
     };
   }));
 
-  return { nodes, edges: buildEdges(graph), lanes: [] };
+  return { nodes, edges: buildEdges(graph, centersFromNodes(nodes)), lanes: [] };
 }
 
 const LANE_LABEL_OFFSET = 180;
@@ -254,7 +298,11 @@ function layoutSwimlane(graph: ProcessGraph): LayoutResult {
     style: { zIndex: -1 },
   }));
 
-  return { nodes: [...laneNodes, ...stepNodes], edges: buildEdges(graph), lanes };
+  return {
+    nodes: [...laneNodes, ...stepNodes],
+    edges: buildEdges(graph, centersFromNodes(stepNodes)),
+    lanes,
+  };
 }
 
 export function layout(graph: ProcessGraph, mode: ViewMode): LayoutResult {

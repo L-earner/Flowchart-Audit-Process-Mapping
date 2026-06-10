@@ -1,4 +1,4 @@
-import type { ProcessEdge, ProcessGraph } from "../types";
+import type { ProcessEdge, ProcessGraph, ProcessNode } from "../types";
 
 interface EdgeInspectorProps {
   graph: ProcessGraph;
@@ -7,15 +7,16 @@ interface EdgeInspectorProps {
   onDelete: () => void;
 }
 
+function nodeOptionLabel(node: ProcessNode): string {
+  return `${node.label} · ${node.type}`;
+}
+
 export default function EdgeInspector({
   graph,
   edge,
   onPatch,
   onDelete,
 }: EdgeInspectorProps) {
-  const source = graph.nodes.find((node) => node.id === edge.source);
-  const target = graph.nodes.find((node) => node.id === edge.target);
-
   return (
     <div className="pf-inspector">
       <div className="pf-inspector-head">
@@ -24,11 +25,36 @@ export default function EdgeInspector({
           Delete
         </button>
       </div>
-      <p className="pf-connection-path">
-        <strong>{source?.label ?? edge.source}</strong>
-        <span aria-hidden="true"> to </span>
-        <strong>{target?.label ?? edge.target}</strong>
+
+      <label>From</label>
+      <select
+        value={edge.source}
+        onChange={(event) => onPatch({ source: event.target.value })}
+      >
+        {graph.nodes.map((node) => (
+          <option key={node.id} value={node.id}>
+            {nodeOptionLabel(node)}
+          </option>
+        ))}
+      </select>
+
+      <label>To</label>
+      <select
+        value={edge.target}
+        onChange={(event) => onPatch({ target: event.target.value })}
+      >
+        {graph.nodes.map((node) => (
+          <option key={node.id} value={node.id}>
+            {nodeOptionLabel(node)}
+          </option>
+        ))}
+      </select>
+
+      <p className="pf-hint">
+        Re-point either end to reroute this connection — no need to delete and
+        redraw.
       </p>
+
       <label>Outcome / condition</label>
       <input
         value={edge.label ?? ""}
