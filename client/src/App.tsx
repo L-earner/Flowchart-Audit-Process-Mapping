@@ -1,6 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { ProcessGraph, ProcessNode, ViewMode, DiagramSummary } from "./types";
-import { MODELS, DEFAULT_MODEL_ID, providerFor } from "@shared/models.ts";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type {
+  ProcessEdge,
+  ProcessGraph,
+  ProcessNode,
+  ViewMode,
+  DiagramSummary,
+} from "./types";
+import {
+  MODELS,
+  DEFAULT_MODEL_ID,
+  modelInfo,
+  providerFor,
+} from "@shared/models.ts";
 import type { Health } from "./lib/api";
 import * as api from "./lib/api";
 import * as edit from "./lib/graphEdit";
@@ -13,7 +24,18 @@ import {
 import Canvas from "./components/Canvas";
 import InputPanel from "./components/InputPanel";
 import NodeInspector from "./components/NodeInspector";
+import EdgeInspector from "./components/EdgeInspector";
+import RefinePanel from "./components/RefinePanel";
+import { assessGraph } from "./lib/graphQuality";
 import "./styles.css";
+
+interface UndoEntry {
+  graph: ProcessGraph;
+  viewMode: ViewMode;
+  dirty: boolean;
+}
+
+const MAX_UNDO_ENTRIES = 50;
 
 export default function App() {
   const [graph, setGraph] = useState<ProcessGraph | null>(null);
@@ -21,10 +43,15 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [diagramId, setDiagramId] = useState<string | null>(null);
   const [diagrams, setDiagrams] = useState<DiagramSummary[]>([]);
   const [dirty, setDirty] = useState(false);
-  const [model, setModel] = useState<string>(DEFAULT_MODEL_ID);
+  const [undoStack, setUndoStack] = useState<UndoEntry[]>([]);
+  const [model, setModel] = useState<string>(() => {
+    const stored = window.localStorage.getItem("pf-model");
+    return stored && modelInfo(stored) ? stored : DEFAULT_MODEL_ID;
+  });
   const [healthInfo, setHealthInfo] = useState<Health | null>(null);
 
   // ----- live mode -----
@@ -36,6 +63,10 @@ export default function App() {
   const refineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const graphRef = useRef<ProcessGraph | null>(null);
   graphRef.current = graph;
+  const viewModeRef = useRef<ViewMode>(viewMode);
+  viewModeRef.current = viewMode;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
   const modelRef = useRef<string>(model);
   modelRef.current = model;
 
@@ -46,17 +77,83 @@ export default function App() {
   useEffect(() => {
     api.health().then(setHealthInfo).catch(() => {});
   }, []);
+  useEffect(() => {
+    window.localStorage.setItem("pf-model", model);
+  }, [model]);
+  useEffect(() => {
+    if (!healthInfo) return;
+    const isReady = (candidate: string) => {
+      const candidateProvider = providerFor(candidate);
+      return candidateProvider === "openrouter"
+        ? healthInfo.hasOpenRouterKey
+        : healthInfo.hasAnthropicKey;
+    };
+    if (!isReady(model)) {
+      const fallback = MODELS.find((candidate) => isReady(candidate.id));
+      if (fallback) setModel(fallback.id);
+    }
+  }, [healthInfo, model]);
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   const provider = providerFor(model);
+  const selectedModel = modelInfo(model);
   const keyMissing =
     healthInfo != null &&
     ((provider === "anthropic" && !healthInfo.hasAnthropicKey) ||
       (provider === "openrouter" && !healthInfo.hasOpenRouterKey));
 
-  function update(next: ProcessGraph) {
+  const update = useCallback((next: ProcessGraph) => {
+    const current = graphRef.current;
+    if (current && current !== next) {
+      setUndoStack((entries) => [
+        ...entries.slice(-(MAX_UNDO_ENTRIES - 1)),
+        {
+          graph: current,
+          viewMode: viewModeRef.current,
+          dirty: dirtyRef.current,
+        },
+      ]);
+    }
     setGraph(next);
     setDirty(true);
-  }
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (busy) return;
+    const previous = undoStack.at(-1);
+    if (!previous) return;
+    setGraph(previous.graph);
+    setViewMode(previous.viewMode);
+    setDirty(previous.dirty);
+    setSelectedId(null);
+    setSelectedEdgeId(null);
+    setUndoStack((entries) => entries.slice(0, -1));
+  }, [busy, undoStack]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        !event.shiftKey &&
+        event.key.toLowerCase() === "z" &&
+        !busy &&
+        undoStack.length > 0
+      ) {
+        event.preventDefault();
+        handleUndo();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [busy, handleUndo, undoStack.length]);
 
   async function handleExtract(opts: { text?: string; files?: File[] }) {
     setBusy(true);
@@ -64,11 +161,31 @@ export default function App() {
     try {
       const g = await api.extract({ ...opts, model });
       setGraph(g);
+      setUndoStack([]);
       setDiagramId(null);
       setDirty(true);
       setSelectedId(null);
+      setSelectedEdgeId(null);
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRefine(instruction: string): Promise<boolean> {
+    if (!graph) return false;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await api.refine(graph, instruction, model);
+      update(updated);
+      setSelectedId(null);
+      setSelectedEdgeId(null);
+      return true;
+    } catch (e) {
+      setError((e as Error).message);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -81,15 +198,15 @@ export default function App() {
       const chunk = pendingChunks.current.join(" ").trim();
       if (!chunk) return;
       pendingChunks.current = [];
+      if (!graphRef.current) return;
       try {
         const updated = await api.refine(graphRef.current, chunk, modelRef.current);
-        setGraph(updated);
-        setDirty(true);
+        update(updated);
       } catch (e) {
         setError((e as Error).message);
       }
     }, 2500);
-  }, []);
+  }, [update]);
 
   function toggleLive() {
     if (liveActive) {
@@ -112,13 +229,29 @@ export default function App() {
     setLiveActive(true);
   }
 
+  function submitLiveTranscript() {
+    const transcript = liveTranscript.trim();
+    if (!transcript || busy) return;
+    transcriberRef.current?.stop();
+    setLiveActive(false);
+    if (refineTimer.current) {
+      clearTimeout(refineTimer.current);
+      refineTimer.current = null;
+    }
+    pendingChunks.current = [];
+    void handleExtract({ text: transcript });
+  }
+
   useEffect(() => {
-    return () => transcriberRef.current?.stop();
+    return () => {
+      transcriberRef.current?.stop();
+      if (refineTimer.current) clearTimeout(refineTimer.current);
+    };
   }, []);
 
   // ----- view toggle (re-layout) -----
   function changeView(mode: ViewMode) {
-    if (graph) setGraph(edit.clearPositions(graph));
+    if (graph && mode !== viewMode) update(edit.clearPositions(graph));
     setViewMode(mode);
   }
 
@@ -134,6 +267,9 @@ export default function App() {
         const { id } = await api.createDiagram(graph, viewMode);
         setDiagramId(id);
       }
+      setUndoStack((entries) =>
+        entries.map((entry) => ({ ...entry, dirty: true })),
+      );
       setDirty(false);
       refreshList();
     } catch (e) {
@@ -144,15 +280,21 @@ export default function App() {
   }
 
   async function handleLoad(id: string) {
+    if (id === diagramId) return;
+    if (dirty && !window.confirm("Discard unsaved changes and open another diagram?")) {
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const d = await api.loadDiagram(id);
       setGraph(d.graph);
+      setUndoStack([]);
       setViewMode(d.viewMode);
       setDiagramId(d.id);
       setDirty(false);
       setSelectedId(null);
+      setSelectedEdgeId(null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -161,14 +303,50 @@ export default function App() {
   }
 
   function handleNew() {
+    if (dirty && !window.confirm("Discard unsaved changes and start a new diagram?")) {
+      return;
+    }
     setGraph(null);
+    setUndoStack([]);
     setDiagramId(null);
     setSelectedId(null);
+    setSelectedEdgeId(null);
     setDirty(false);
+  }
+
+  async function handleDeleteDiagram(id: string) {
+    const diagram = diagrams.find((item) => item.id === id);
+    if (!window.confirm(`Delete "${diagram?.title ?? "this diagram"}"? This cannot be undone.`)) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteDiagram(id);
+      if (id === diagramId) {
+        setGraph(null);
+        setUndoStack([]);
+        setDiagramId(null);
+        setSelectedId(null);
+        setSelectedEdgeId(null);
+        setDirty(false);
+      }
+      refreshList();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   const selectedNode: ProcessNode | null =
     (graph && selectedId && graph.nodes.find((n) => n.id === selectedId)) || null;
+  const selectedEdge: ProcessEdge | null =
+    (graph &&
+      selectedEdgeId &&
+      graph.edges.find((edge) => edge.id === selectedEdgeId)) ||
+    null;
+  const quality = useMemo(() => (graph ? assessGraph(graph) : null), [graph]);
 
   return (
     <div className="pf-app">
@@ -198,6 +376,13 @@ export default function App() {
                   Swimlane
                 </button>
               </div>
+              <button
+                onClick={handleUndo}
+                disabled={busy || undoStack.length === 0}
+                title="Undo last change (Ctrl/Cmd+Z)"
+              >
+                Undo
+              </button>
               <button onClick={handleSave} disabled={busy}>
                 {diagramId ? (dirty ? "Save*" : "Saved") : "Save"}
               </button>
@@ -233,7 +418,7 @@ export default function App() {
                   </option>
                 ))}
               </optgroup>
-              <optgroup label="OpenRouter (open-source)">
+              <optgroup label="OpenRouter">
                 {MODELS.filter((m) => m.provider === "openrouter").map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}
@@ -248,20 +433,42 @@ export default function App() {
               </p>
             ) : (
               <p className="pf-hint">
-                {provider === "openrouter"
-                  ? "Open-weight model via OpenRouter."
-                  : "Claude — schema-enforced extraction."}
+                {selectedModel?.note ??
+                  (provider === "openrouter"
+                    ? "Model via OpenRouter."
+                    : "Claude with schema-enforced extraction.")}
               </p>
             )}
           </div>
           <InputPanel
             busy={busy}
+            supportsImages={Boolean(selectedModel?.vision)}
+            supportsPdf={provider === "anthropic"}
+            blockedReason={
+              keyMissing
+                ? `Add ${provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY"} to use this model.`
+                : undefined
+            }
             onExtract={handleExtract}
             liveActive={liveActive}
             liveSupported={liveSupported}
             liveTranscript={liveTranscript}
             onToggleLive={toggleLive}
+            onSubmitLive={submitLiveTranscript}
+            hasGraph={Boolean(graph)}
           />
+          {graph && (
+            <RefinePanel
+              busy={busy}
+              blockedReason={
+                keyMissing
+                  ? `Add ${provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY"} to update this map.`
+                  : undefined
+              }
+              voiceSupported={liveSupported}
+              onRefine={handleRefine}
+            />
+          )}
           <div className="pf-saved">
             <h4>Saved diagrams</h4>
             {diagrams.length === 0 && <p className="pf-muted">None yet.</p>}
@@ -271,12 +478,22 @@ export default function App() {
                   <button
                     className={d.id === diagramId ? "active" : ""}
                     onClick={() => handleLoad(d.id)}
+                    disabled={busy}
                   >
                     {d.title}
                   </button>
                 </li>
               ))}
             </ul>
+            {diagramId && (
+              <button
+                className="pf-delete-selected"
+                onClick={() => handleDeleteDiagram(diagramId)}
+                disabled={busy}
+              >
+                Delete selected diagram
+              </button>
+            )}
           </div>
         </aside>
 
@@ -285,9 +502,34 @@ export default function App() {
             <Canvas
               graph={graph}
               viewMode={viewMode}
+              selectedNodeId={selectedId}
               onSelectNode={setSelectedId}
+              onSelectEdge={setSelectedEdgeId}
               onNodePositions={(pos) => update(edit.applyPositions(graph, pos))}
               onConnect={(s, t) => update(edit.addEdge(graph, s, t))}
+              onAddNode={(type, actorId, position, connectFrom) => {
+                const { graph: withNode, nodeId } = edit.addNode(
+                  graph,
+                  type,
+                  actorId,
+                  position,
+                );
+                const next = connectFrom
+                  ? edit.addEdge(withNode, connectFrom, nodeId)
+                  : withNode;
+                update(next);
+                setSelectedId(nodeId);
+                setSelectedEdgeId(null);
+              }}
+              onDeleteElements={(nodeIds, edgeIds) => {
+                if (nodeIds.length === 0 && edgeIds.length === 0) return;
+                let next = graph;
+                for (const id of nodeIds) next = edit.deleteNode(next, id);
+                for (const id of edgeIds) next = edit.deleteEdge(next, id);
+                update(next);
+                setSelectedId(null);
+                setSelectedEdgeId(null);
+              }}
             />
           ) : (
             <div className="pf-empty">
@@ -301,6 +543,31 @@ export default function App() {
 
         {graph && (
           <aside className="pf-rightbar">
+            {quality && (
+              <section className="pf-quality">
+                <div className="pf-quality-head">
+                  <h3>Map quality</h3>
+                  <strong>{quality.score}%</strong>
+                </div>
+                <div className="pf-quality-grid">
+                  {quality.checks.map((check) => (
+                    <div className={`pf-quality-stat ${check.status}`} key={check.label}>
+                      <span>{check.value}</span>
+                      {check.label}
+                    </div>
+                  ))}
+                </div>
+                {quality.warnings.length > 0 ? (
+                  <ul className="pf-quality-warnings">
+                    {quality.warnings.map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="pf-quality-good">Core mapping checks passed.</p>
+                )}
+              </section>
+            )}
             <div className="pf-add">
               <h4>Add step</h4>
               <div className="pf-add-buttons">
@@ -315,6 +582,7 @@ export default function App() {
                       );
                       update(g);
                       setSelectedId(nodeId);
+                      setSelectedEdgeId(null);
                     }}
                   >
                     + {t}
@@ -336,6 +604,19 @@ export default function App() {
                 onDelete={() => {
                   update(edit.deleteNode(graph, selectedNode.id));
                   setSelectedId(null);
+                }}
+              />
+            )}
+            {selectedEdge && (
+              <EdgeInspector
+                graph={graph}
+                edge={selectedEdge}
+                onPatch={(patch) =>
+                  update(edit.updateEdge(graph, selectedEdge.id, patch))
+                }
+                onDelete={() => {
+                  update(edit.deleteEdge(graph, selectedEdge.id));
+                  setSelectedEdgeId(null);
                 }}
               />
             )}

@@ -53,16 +53,15 @@ the verify script.
 `refineGraph(graph, chunk, modelId?)`), which dispatches to:
 - `lib/providers/anthropic.ts` — Anthropic SDK, adaptive thinking, **schema-enforced**
   structured output (`output_config.format`). Supports text, PDF, and images.
-- `lib/providers/openrouter.ts` — OpenAI-compatible `chat/completions` over `fetch`. Open
-  models can't enforce a schema, so the schema is embedded in the prompt
-  (`SCHEMA_INSTRUCTION`) + `response_format: json_object`, and output is parsed leniently.
+- `lib/providers/openrouter.ts` — OpenAI-compatible `chat/completions` over `fetch`, using
+  `response_format: json_schema`; output is also parsed and validated locally.
   Text always; images only on vision-capable models; PDFs are rejected with a clear message.
 
 Shared pieces: `lib/inputs.ts` (`ExtractInput`), `lib/prompts.ts` (system prompt + refine
-addendum + schema instruction), `lib/parse.ts` (`parseGraphJson` — lenient parse, strips
+addendum), `lib/parse.ts` (`parseGraphJson` — lenient parse, strips
 code fences / extracts the outermost `{…}`, then `validateProcessGraph`).
 
-The audit-grade system prompt (actors → lanes, decisions, **control points with the risk
+The audit-grade system prompt (actors → lanes, decisions, optional **control points with the risk
 each addresses**) lives in `lib/prompts.ts` and is shared by both providers.
 
 - `lib/documents.ts` — maps an uploaded file to an `ExtractInput`: PDF → document block,

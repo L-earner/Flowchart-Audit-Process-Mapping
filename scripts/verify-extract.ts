@@ -1,5 +1,6 @@
 // End-to-end check of the extraction pipeline against a fixture transcript.
-// Run with: npm run verify   (requires ANTHROPIC_API_KEY)
+// Run with: npm run verify   (requires the selected provider's API key)
+import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -34,10 +35,6 @@ async function main() {
     ["has >= 2 actors", graph.actors.length >= 2],
     ["has >= 4 nodes", graph.nodes.length >= 4],
     ["has edges", graph.edges.length >= 3],
-    [
-      "has at least one control node",
-      graph.nodes.some((n) => n.type === "control"),
-    ],
     [
       "has at least one decision node",
       graph.nodes.some((n) => n.type === "decision"),

@@ -1,5 +1,6 @@
 import type {
   ProcessGraph,
+  ProcessEdge,
   ProcessNode,
   NodeType,
   ControlInfo,
@@ -44,6 +45,7 @@ export function addNode(
   graph: ProcessGraph,
   type: NodeType,
   actorId: string | null,
+  position?: { x: number; y: number },
 ): { graph: ProcessGraph; nodeId: string } {
   const id = uid("n");
   const node: ProcessNode = {
@@ -51,6 +53,7 @@ export function addNode(
     type,
     label: "New step",
     actorId: type === "start" || type === "end" ? null : actorId,
+    ...(position ? { position } : {}),
     ...(type === "control"
       ? { control: { controlType: "manual", riskAddressed: "" } as ControlInfo }
       : {}),
@@ -65,7 +68,20 @@ export function updateNode(
 ): ProcessGraph {
   return {
     ...graph,
-    nodes: graph.nodes.map((n) => (n.id === nodeId ? { ...n, ...patch } : n)),
+    nodes: graph.nodes.map((n) => {
+      if (n.id !== nodeId) return n;
+      const next = { ...n, ...patch };
+      if (patch.type === "start" || patch.type === "end") {
+        next.actorId = null;
+      }
+      if (patch.type === "control" && !next.control) {
+        next.control = { controlType: "manual", riskAddressed: "" };
+      }
+      if (patch.type && patch.type !== "control") {
+        delete next.control;
+      }
+      return next;
+    }),
   };
 }
 
@@ -97,6 +113,26 @@ export function deleteNode(graph: ProcessGraph, nodeId: string): ProcessGraph {
     ...graph,
     nodes: graph.nodes.filter((n) => n.id !== nodeId),
     edges: graph.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+  };
+}
+
+export function updateEdge(
+  graph: ProcessGraph,
+  edgeId: string,
+  patch: Partial<ProcessEdge>,
+): ProcessGraph {
+  return {
+    ...graph,
+    edges: graph.edges.map((edge) =>
+      edge.id === edgeId ? { ...edge, ...patch } : edge,
+    ),
+  };
+}
+
+export function deleteEdge(graph: ProcessGraph, edgeId: string): ProcessGraph {
+  return {
+    ...graph,
+    edges: graph.edges.filter((edge) => edge.id !== edgeId),
   };
 }
 

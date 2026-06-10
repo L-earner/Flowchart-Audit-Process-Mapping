@@ -6,3 +6,16 @@ expertMode = true
 [[ports]]
 localPort = 3001
 externalPort = 80
+
+[[ports]]
+localPort = 4317
+externalPort = 3000
+
+[[ports]]
+localPort = 5173
+externalPort = 5173
+
+[deployment]
+deploymentTarget = "cloudrun"
+build = "npm run build"
+run = "npm start"

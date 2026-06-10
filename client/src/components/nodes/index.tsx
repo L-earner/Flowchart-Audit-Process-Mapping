@@ -1,7 +1,7 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { ProcessNodeData } from "../../lib/layout";
 
-const handleStyle = { width: 8, height: 8, background: "#94a3b8" };
+const handleStyle = { width: 12, height: 12, background: "#64748b" };
 
 function Handles() {
   return (

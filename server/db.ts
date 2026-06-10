@@ -109,3 +109,7 @@ export function updateDiagram(
   ).run(graph.title, JSON.stringify(graph), viewMode, now, id);
   return getDiagram(id);
 }
+
+export function deleteDiagram(id: string): boolean {
+  return db.prepare("DELETE FROM diagrams WHERE id = ?").run(id).changes > 0;
+}

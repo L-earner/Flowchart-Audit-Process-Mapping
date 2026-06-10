@@ -84,3 +84,8 @@ export async function saveDiagram(
   });
   await asJson(res);
 }
+
+export async function deleteDiagram(id: string): Promise<void> {
+  const res = await fetch(`/api/diagrams/${id}`, { method: "DELETE" });
+  await asJson(res);
+}

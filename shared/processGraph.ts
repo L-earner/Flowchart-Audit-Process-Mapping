@@ -68,6 +68,56 @@ export interface ProcessGraph {
 
 export type ViewMode = "flowchart" | "swimlane";
 
+const DEFAULT_CONTROL_INFO: ControlInfo = {
+  controlType: "manual",
+  riskAddressed: "Not specified.",
+};
+
+/**
+ * Backfill control metadata omitted by older graphs or non-strict model output.
+ * This keeps control nodes editable without inventing a specific business risk.
+ */
+export function normalizeProcessGraph(graph: ProcessGraph): ProcessGraph {
+  if (!graph || !Array.isArray(graph.nodes)) return graph;
+
+  let changed = false;
+  const nodes = graph.nodes.map((node) => {
+    if (!node || node.type !== "control") return node;
+
+    const control = node.control as Partial<ControlInfo> | undefined;
+    const controlType = ["preventive", "detective", "manual", "automated"].includes(
+      control?.controlType ?? "",
+    )
+      ? control!.controlType!
+      : DEFAULT_CONTROL_INFO.controlType;
+    const riskAddressed =
+      typeof control?.riskAddressed === "string" &&
+      control.riskAddressed.trim()
+        ? control.riskAddressed
+        : DEFAULT_CONTROL_INFO.riskAddressed;
+
+    if (
+      control &&
+      control.controlType === controlType &&
+      control.riskAddressed === riskAddressed
+    ) {
+      return node;
+    }
+
+    changed = true;
+    return {
+      ...node,
+      control: {
+        ...control,
+        controlType,
+        riskAddressed,
+      },
+    };
+  });
+
+  return changed ? { ...graph, nodes } : graph;
+}
+
 // ---------------------------------------------------------------------------
 // JSON Schema for Claude structured outputs (output_config.format).
 // Kept aligned with the types above. Per structured-output limits we use only
@@ -175,27 +225,99 @@ export function validateProcessGraph(value: unknown): {
   if (typeof g.title !== "string" || g.title.length === 0) {
     errors.push("missing title");
   }
+  const actors = Array.isArray(g.actors) ? g.actors : [];
+  const nodes = Array.isArray(g.nodes) ? g.nodes : [];
+  const edges = Array.isArray(g.edges) ? g.edges : [];
   if (!Array.isArray(g.actors)) errors.push("actors is not an array");
   if (!Array.isArray(g.nodes)) errors.push("nodes is not an array");
   if (!Array.isArray(g.edges)) errors.push("edges is not an array");
 
-  const nodeIds = new Set((g.nodes ?? []).map((n) => n.id));
-  const actorIds = new Set((g.actors ?? []).map((a) => a.id));
-
-  for (const n of g.nodes ?? []) {
-    if (!NODE_TYPES.includes(n.type)) {
-      errors.push(`node ${n.id} has invalid type ${n.type}`);
+  const actorIds = new Set<string>();
+  for (const [index, actor] of actors.entries()) {
+    if (!actor || typeof actor !== "object") {
+      errors.push(`actor ${index} is not an object`);
+      continue;
     }
-    if (n.actorId !== null && !actorIds.has(n.actorId)) {
-      errors.push(`node ${n.id} references unknown actor ${n.actorId}`);
+    if (typeof actor.id !== "string" || !actor.id) {
+      errors.push(`actor ${index} has no id`);
+    } else if (actorIds.has(actor.id)) {
+      errors.push(`duplicate actor id ${actor.id}`);
+    } else {
+      actorIds.add(actor.id);
+    }
+    if (typeof actor.name !== "string" || !actor.name.trim()) {
+      errors.push(`actor ${actor.id ?? index} has no name`);
     }
   }
-  for (const e of g.edges ?? []) {
-    if (!nodeIds.has(e.source)) {
-      errors.push(`edge ${e.id} has unknown source ${e.source}`);
+
+  const nodeIds = new Set<string>();
+  for (const [index, node] of nodes.entries()) {
+    if (!node || typeof node !== "object") {
+      errors.push(`node ${index} is not an object`);
+      continue;
     }
-    if (!nodeIds.has(e.target)) {
-      errors.push(`edge ${e.id} has unknown target ${e.target}`);
+    const nodeName = typeof node.id === "string" && node.id ? node.id : String(index);
+    if (typeof node.id !== "string" || !node.id) {
+      errors.push(`node ${index} has no id`);
+    } else if (nodeIds.has(node.id)) {
+      errors.push(`duplicate node id ${node.id}`);
+    } else {
+      nodeIds.add(node.id);
+    }
+    if (typeof node.label !== "string" || !node.label.trim()) {
+      errors.push(`node ${nodeName} has no label`);
+    }
+    if (!NODE_TYPES.includes(node.type)) {
+      errors.push(`node ${nodeName} has invalid type ${String(node.type)}`);
+      continue;
+    }
+    if (node.type === "start" || node.type === "end") {
+      if (node.actorId !== null) {
+        errors.push(`node ${nodeName} must not reference an actor`);
+      }
+    } else if (typeof node.actorId !== "string" || !actorIds.has(node.actorId)) {
+      errors.push(`node ${nodeName} references unknown actor ${String(node.actorId)}`);
+    }
+    if (node.type === "control") {
+      if (!node.control || typeof node.control !== "object") {
+        errors.push(`control node ${nodeName} has no control details`);
+      } else {
+        if (
+          !["preventive", "detective", "manual", "automated"].includes(
+            node.control.controlType,
+          )
+        ) {
+          errors.push(`control node ${nodeName} has an invalid control type`);
+        }
+        if (
+          typeof node.control.riskAddressed !== "string" ||
+          !node.control.riskAddressed.trim()
+        ) {
+          errors.push(`control node ${nodeName} has no risk addressed`);
+        }
+      }
+    }
+  }
+
+  const edgeIds = new Set<string>();
+  for (const [index, edge] of edges.entries()) {
+    if (!edge || typeof edge !== "object") {
+      errors.push(`edge ${index} is not an object`);
+      continue;
+    }
+    const edgeName = typeof edge.id === "string" && edge.id ? edge.id : String(index);
+    if (typeof edge.id !== "string" || !edge.id) {
+      errors.push(`edge ${index} has no id`);
+    } else if (edgeIds.has(edge.id)) {
+      errors.push(`duplicate edge id ${edge.id}`);
+    } else {
+      edgeIds.add(edge.id);
+    }
+    if (!nodeIds.has(edge.source)) {
+      errors.push(`edge ${edgeName} has unknown source ${String(edge.source)}`);
+    }
+    if (!nodeIds.has(edge.target)) {
+      errors.push(`edge ${edgeName} has unknown target ${String(edge.target)}`);
     }
   }
 

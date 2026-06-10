@@ -19,11 +19,13 @@ export const MODELS: ModelInfo[] = [
   { id: "claude-opus-4-8", label: "Claude Opus 4.8", provider: "anthropic", vision: true, note: "Best quality; text, PDF, images." },
   { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", provider: "anthropic", vision: true, note: "Faster / cheaper than Opus." },
 
-  // --- OpenRouter open-weight models (JSON-prompted; text-focused) ---
+  // --- OpenRouter models (schema-constrained output) ---
+  { id: "openai/gpt-5.3-codex", label: "OpenAI GPT-5.3-Codex", provider: "openrouter", vision: false, note: "Advanced reasoning and coding model; text input." },
+  { id: "openai/gpt-oss-120b", label: "OpenAI gpt-oss 120B", provider: "openrouter", vision: false, note: "OpenAI open-weight reasoning model; text input." },
   { id: "deepseek/deepseek-chat", label: "DeepSeek V3", provider: "openrouter", vision: false, note: "Strong, cheap, open-weight." },
   { id: "meta-llama/llama-3.3-70b-instruct", label: "Llama 3.3 70B", provider: "openrouter", vision: false },
   { id: "qwen/qwen-2.5-72b-instruct", label: "Qwen 2.5 72B", provider: "openrouter", vision: false },
-  { id: "mistralai/mistral-small-3.2-24b-instruct", label: "Mistral Small 3.2 24B", provider: "openrouter", vision: false },
+  { id: "mistralai/mistral-small-3.2-24b-instruct", label: "Mistral Small 3.2 24B", provider: "openrouter", vision: true, note: "Text and image input." },
   { id: "qwen/qwen2.5-vl-72b-instruct", label: "Qwen2.5-VL 72B", provider: "openrouter", vision: true, note: "Open-weight with vision (images)." },
 ];
 

@@ -3,7 +3,11 @@ import multer from "multer";
 import { extractGraph, refineGraph } from "../lib/llm.ts";
 import type { ExtractInput } from "../lib/inputs.ts";
 import { fileToInput } from "../lib/documents.ts";
-import { validateProcessGraph, type ProcessGraph } from "@shared/processGraph.ts";
+import {
+  normalizeProcessGraph,
+  validateProcessGraph,
+  type ProcessGraph,
+} from "@shared/processGraph.ts";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -46,7 +50,7 @@ extractRouter.post("/", upload.array("files"), async (req, res) => {
 /**
  * POST /api/extract/refine
  * JSON: { graph: ProcessGraph, transcriptChunk: string }
- * Returns the merged/updated ProcessGraph (live mode).
+ * Returns the updated ProcessGraph for live transcript or explicit instructions.
  */
 extractRouter.post("/refine", async (req, res) => {
   try {
@@ -58,8 +62,9 @@ extractRouter.post("/refine", async (req, res) => {
     if (!transcriptChunk || !transcriptChunk.trim()) {
       return res.status(400).json({ error: "transcriptChunk is required." });
     }
-    if (graph) {
-      const { ok, errors } = validateProcessGraph(graph);
+    const normalizedGraph = graph ? normalizeProcessGraph(graph) : undefined;
+    if (normalizedGraph) {
+      const { ok, errors } = validateProcessGraph(normalizedGraph);
       if (!ok) {
         return res
           .status(400)
@@ -67,8 +72,12 @@ extractRouter.post("/refine", async (req, res) => {
       }
     }
 
-    const base: ProcessGraph =
-      graph ?? { title: "Untitled process", actors: [], nodes: [], edges: [] };
+    const base: ProcessGraph = normalizedGraph ?? {
+      title: "Untitled process",
+      actors: [],
+      nodes: [],
+      edges: [],
+    };
     const updated = await refineGraph(base, transcriptChunk, model);
     res.json({ graph: updated });
   } catch (err) {

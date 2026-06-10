@@ -2,7 +2,7 @@ import type { ProcessGraph } from "@shared/processGraph.ts";
 import { type ModelInfo, modelInfo as lookupModel } from "@shared/models.ts";
 import type { ExtractInput } from "../inputs.ts";
 import { parseGraphJson } from "../parse.ts";
-import { SCHEMA_INSTRUCTION } from "../prompts.ts";
+import { PROCESS_GRAPH_SCHEMA } from "@shared/processGraph.ts";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -39,7 +39,7 @@ function buildParts(inputs: ExtractInput[], model: ModelInfo | undefined): Part[
   return parts;
 }
 
-/** OpenRouter provider: OpenAI-compatible chat completions, JSON via prompt. */
+/** OpenRouter provider: OpenAI-compatible chat completions with structured output. */
 export async function generateGraphOpenRouter(
   model: string,
   system: string,
@@ -57,9 +57,16 @@ export async function generateGraphOpenRouter(
     model,
     max_tokens: 8000,
     temperature: 0,
-    response_format: { type: "json_object" as const },
+    response_format: {
+      type: "json_schema" as const,
+      json_schema: {
+        name: "process_graph",
+        strict: false,
+        schema: PROCESS_GRAPH_SCHEMA,
+      },
+    },
     messages: [
-      { role: "system", content: system + SCHEMA_INSTRUCTION },
+      { role: "system", content: system },
       { role: "user", content: buildParts(inputs, info) },
     ],
   };

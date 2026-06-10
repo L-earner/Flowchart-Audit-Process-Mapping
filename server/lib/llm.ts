@@ -27,10 +27,10 @@ export async function extractGraph(
   return generate(resolveModel(modelId), SYSTEM_PROMPT, inputs);
 }
 
-/** Merge a new transcript chunk into an existing graph (live mode). */
+/** Apply a transcript chunk or explicit editing instruction to an existing graph. */
 export async function refineGraph(
   current: ProcessGraph,
-  transcriptChunk: string,
+  instruction: string,
   modelId?: string,
 ): Promise<ProcessGraph> {
   const inputs: ExtractInput[] = [
@@ -39,9 +39,9 @@ export async function refineGraph(
       text:
         "Current graph JSON:\n" +
         JSON.stringify(current) +
-        "\n\nNew transcript since last update:\n" +
-        transcriptChunk +
-        "\n\nReturn the full updated process graph as JSON.",
+        "\n\nRequested update or new walkthrough information:\n" +
+        instruction +
+        "\n\nApply the request to the current graph and return the full updated process graph as JSON.",
     },
   ];
   return generate(resolveModel(modelId), SYSTEM_PROMPT + REFINE_ADDENDUM, inputs);
