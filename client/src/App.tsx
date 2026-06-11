@@ -15,6 +15,7 @@ import {
 import type { Health } from "./lib/api";
 import * as api from "./lib/api";
 import * as edit from "./lib/graphEdit";
+import { applyOps, summarizeOps } from "@shared/graphOps.ts";
 import { exportJson, exportPng } from "./lib/exportImage";
 import {
   createTranscriber,
@@ -62,9 +63,16 @@ export default function App() {
   const liveSupported = isLiveSupported();
   const [liveActive, setLiveActive] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState("");
+  const [liveInterim, setLiveInterim] = useState("");
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
   const transcriberRef = useRef<LiveTranscriber | null>(null);
   const pendingChunks = useRef<string[]>([]);
   const refineTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const liveSessionRef = useRef<string | null>(null);
+  const inFlightRef = useRef(false);
+  const liveFailuresRef = useRef(0);
+  const liveActiveRef = useRef(false);
+  liveActiveRef.current = liveActive;
   const graphRef = useRef<ProcessGraph | null>(null);
   graphRef.current = graph;
   const viewModeRef = useRef<ViewMode>(viewMode);
@@ -153,6 +161,8 @@ export default function App() {
     setSelectedEdgeId(null);
     setUndoStack((entries) => entries.slice(0, -1));
   }, [busy, undoStack]);
+  const handleUndoRef = useRef(handleUndo);
+  handleUndoRef.current = handleUndo;
 
   const handleRedo = useCallback(() => {
     if (busy) return;
@@ -235,27 +245,107 @@ export default function App() {
     }
   }
 
-  // ----- live: debounced refine -----
-  const scheduleRefine = useCallback(() => {
-    if (refineTimer.current) clearTimeout(refineTimer.current);
-    refineTimer.current = setTimeout(async () => {
-      const chunk = pendingChunks.current.join(" ").trim();
-      if (!chunk) return;
-      pendingChunks.current = [];
-      if (!graphRef.current) return;
-      try {
-        const updated = await api.refine(graphRef.current, chunk, modelRef.current);
-        update(updated);
-      } catch (e) {
-        setError((e as Error).message);
-      }
-    }, 2500);
-  }, [update]);
+  // ----- live: incremental ops over a server session -----
+  // Single-flight: at most one /api/live/chunk request at a time; speech that
+  // arrives while a request is in flight buffers and goes out next. The
+  // session holds the model's conversation context server-side; the client
+  // graph rides along on every request as the source of truth.
+  const endLiveSession = useCallback(() => {
+    const sessionId = liveSessionRef.current;
+    liveSessionRef.current = null;
+    if (sessionId) void api.liveEnd(sessionId);
+  }, []);
 
-  function toggleLive() {
+  const sendPendingRef = useRef<() => Promise<void>>(async () => {});
+  const sendPending = useCallback(async () => {
+    if (inFlightRef.current) return;
+    const sessionId = liveSessionRef.current;
+    if (!sessionId) return;
+    const chunk = pendingChunks.current.join(" ").trim();
+    if (!chunk) {
+      if (!liveActiveRef.current) endLiveSession();
+      return;
+    }
+    pendingChunks.current = [];
+    inFlightRef.current = true;
+    setLiveStatus("Updating the map…");
+    try {
+      let result: api.LiveChunkResult;
+      try {
+        result = await api.liveChunk(sessionId, chunk, graphRef.current, modelRef.current);
+      } catch (e) {
+        if (!(e instanceof api.SessionExpiredError)) throw e;
+        // Server forgot us (restart / TTL). The client graph is authoritative,
+        // so we can transparently re-seed a fresh session and retry once.
+        const fresh = await api.liveStart(graphRef.current);
+        liveSessionRef.current = fresh.sessionId;
+        result = await api.liveChunk(fresh.sessionId, chunk, graphRef.current, modelRef.current);
+      }
+      liveFailuresRef.current = 0;
+      if (result.ops.some((op) => op.op === "undo_last")) {
+        handleUndoRef.current();
+        setLiveStatus("Undid the last change");
+      } else if (result.ops.length > 0) {
+        // Apply ops to the *current* graph (not the server snapshot) so manual
+        // edits made while the request was in flight survive; ops that now
+        // target a deleted element are skipped harmlessly.
+        const base = graphRef.current;
+        const next = base ? applyOps(base, result.ops).graph : result.graph;
+        update(next);
+        setLiveStatus(result.note ?? summarizeOps(result.ops));
+      } else {
+        setLiveStatus(result.note ?? "Listening…");
+      }
+    } catch (e) {
+      liveFailuresRef.current += 1;
+      // Put the words back so they aren't lost — but give up after two
+      // consecutive failures rather than retrying forever.
+      if (liveFailuresRef.current < 2) pendingChunks.current.unshift(chunk);
+      setError((e as Error).message);
+      setLiveStatus(null);
+    } finally {
+      inFlightRef.current = false;
+      const hasMore = pendingChunks.current.length > 0;
+      if (hasMore && liveSessionRef.current) {
+        setTimeout(() => void sendPendingRef.current(), 300);
+      } else if (!liveActiveRef.current) {
+        endLiveSession();
+      }
+    }
+  }, [update, endLiveSession]);
+  sendPendingRef.current = sendPending;
+
+  const scheduleSend = useCallback(() => {
+    if (refineTimer.current) clearTimeout(refineTimer.current);
+    // Long monologues shouldn't wait for a pause; flush once enough buffered.
+    if (pendingChunks.current.join(" ").length > 400) {
+      void sendPending();
+      return;
+    }
+    refineTimer.current = setTimeout(() => void sendPending(), 2500);
+  }, [sendPending]);
+
+  async function toggleLive() {
     if (liveActive) {
       transcriberRef.current?.stop();
       setLiveActive(false);
+      liveActiveRef.current = false;
+      setLiveInterim("");
+      setLiveStatus(null);
+      if (refineTimer.current) {
+        clearTimeout(refineTimer.current);
+        refineTimer.current = null;
+      }
+      // Flush whatever is buffered; sendPending ends the session once idle.
+      void sendPending();
+      return;
+    }
+    setError(null);
+    let sessionId: string;
+    try {
+      ({ sessionId } = await api.liveStart(graphRef.current));
+    } catch (e) {
+      setError((e as Error).message);
       return;
     }
     const t = createTranscriber(
@@ -263,14 +353,20 @@ export default function App() {
         if (!chunk) return;
         setLiveTranscript((prev) => (prev ? prev + " " + chunk : chunk));
         pendingChunks.current.push(chunk);
-        scheduleRefine();
+        scheduleSend();
       },
-      () => {},
+      setLiveInterim,
     );
-    if (!t) return;
+    if (!t) {
+      void api.liveEnd(sessionId);
+      return;
+    }
+    liveSessionRef.current = sessionId;
+    liveFailuresRef.current = 0;
     transcriberRef.current = t;
     t.start();
     setLiveActive(true);
+    setLiveStatus("Listening…");
   }
 
   function submitLiveTranscript() {
@@ -278,11 +374,15 @@ export default function App() {
     if (!transcript || busy) return;
     transcriberRef.current?.stop();
     setLiveActive(false);
+    liveActiveRef.current = false;
+    setLiveInterim("");
+    setLiveStatus(null);
     if (refineTimer.current) {
       clearTimeout(refineTimer.current);
       refineTimer.current = null;
     }
     pendingChunks.current = [];
+    endLiveSession();
     void handleExtract({ text: transcript });
   }
 
@@ -290,8 +390,9 @@ export default function App() {
     return () => {
       transcriberRef.current?.stop();
       if (refineTimer.current) clearTimeout(refineTimer.current);
+      endLiveSession();
     };
-  }, []);
+  }, [endLiveSession]);
 
   // ----- view toggle (re-layout) -----
   function changeView(mode: ViewMode) {
@@ -516,7 +617,9 @@ export default function App() {
             liveActive={liveActive}
             liveSupported={liveSupported}
             liveTranscript={liveTranscript}
-            onToggleLive={toggleLive}
+            liveInterim={liveInterim}
+            liveStatus={liveStatus}
+            onToggleLive={() => void toggleLive()}
             onSubmitLive={submitLiveTranscript}
             hasGraph={Boolean(graph)}
           />

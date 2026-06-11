@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
 import { extractRouter } from "./routes/extract.ts";
 import { diagramsRouter } from "./routes/diagrams.ts";
+import { liveRouter } from "./routes/live.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3001);
@@ -22,6 +23,7 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/extract", extractRouter);
 app.use("/api/diagrams", diagramsRouter);
+app.use("/api/live", liveRouter);
 
 // In production, serve the built client from dist/.
 const distDir = join(__dirname, "..", "dist");

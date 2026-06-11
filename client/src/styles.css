@@ -267,6 +267,12 @@ body {
 .pf-live-submit {
   margin-top: 8px;
 }
+.pf-live-status {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #047857;
+  font-weight: 500;
+}
 
 .pf-refine {
   margin-top: 18px;

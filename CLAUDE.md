@@ -17,6 +17,7 @@ editable process-flow diagram on a canvas, for audit teams. Greenfield, runs on 
 - `npm start` — production: serves the built `dist/` + API from Express on :3001.
 - `npm run typecheck` — `tsc --noEmit` over server, client, shared, scripts.
 - `npm run verify` — end-to-end extraction check against a fixture transcript. **Requires `ANTHROPIC_API_KEY`.**
+- `npm run verify:live` — end-to-end live-mode check: replays the fixture in chunks through the incremental-ops pipeline (plus voice-command, undo, manual-edit, and compaction tests). Requires the selected provider's key; `LLM_MODEL=<id>` overrides the model for both verify scripts.
 
 Replit run button uses `npm run build && npm start` (single port 3001 → external 80).
 
@@ -66,9 +67,35 @@ each addresses**) lives in `lib/prompts.ts` and is shared by both providers.
 
 - `lib/documents.ts` — maps an uploaded file to an `ExtractInput`: PDF → document block,
   `.docx` → text via `mammoth`, text/* → text, images → image block.
-- `routes/extract.ts` — `POST /api/extract` (multipart: `text` + `files`), `POST /api/extract/refine` (JSON, live mode).
+- `routes/extract.ts` — `POST /api/extract` (multipart: `text` + `files`), `POST /api/extract/refine` (JSON, used by the RefinePanel's full-graph update).
 - `routes/diagrams.ts` + `db.ts` — diagram CRUD over `better-sqlite3` (`diagrams.db`, gitignored).
 - `index.ts` — wires routes, serves `dist/` in production.
+
+**Live mode (incremental ops).** The Live tab does NOT use refine. The model emits
+small **graph operations** (`shared/graphOps.ts`: `GraphOp`, `LIVE_OPS_SCHEMA`,
+`applyOps`, `diffGraphs`, `renderCompactGraph`) instead of regenerating the graph:
+
+- `routes/live.ts` — `POST /api/live/start` (open a session seeded with the current
+  graph), `POST /api/live/chunk` (`{sessionId, chunk, graph, model?}` → `{ops, note?,
+  rejected, version, graph}`; unknown session → **410 `session_expired`**, the client
+  transparently restarts), `POST /api/live/end`.
+- `lib/liveSession.ts` — in-memory session store (TTL-swept; fine because the **client
+  graph is the source of truth** and rides along on every chunk request). Holds the
+  provider-neutral message history; `compactHistory` replaces old turns with a compact
+  graph snapshot when the history exceeds `LIVE_COMPACT_TOKENS` (default 8000) — the
+  graph IS the state, so no LLM summarization is needed.
+- `lib/liveOps.ts` — per-chunk pipeline: `diffGraphs(sessionMirror, clientGraph)` turns
+  manual canvas edits into model notices (so deleted nodes are never resurrected),
+  rejected-op corrections are fed back the next turn, `applyOps` applies with per-op
+  skip. The full graph JSON never enters model context — only compact notation.
+- Providers expose `generateOps*` alongside `generateGraph*`; the Anthropic path uses
+  prompt-cache breakpoints on the frozen `LIVE_SYSTEM_PROMPT` + last message, and
+  `output_config.effort: "low"` for latency (bump to "medium" if narration gets
+  under-extracted).
+- Client (`App.tsx`): single-flight chunk sender (2.5s debounce, immediate flush over
+  ~400 buffered chars); applies returned ops to the *current* graph so edits made while
+  a request is in flight survive; a voice "undo that" comes back as a lone `undo_last`
+  op and runs the existing snapshot undo stack.
 
 ### Client (`client/`, React + Vite + `@xyflow/react`)
 - `lib/api.ts` — typed fetch wrappers for every endpoint.

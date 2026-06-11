@@ -12,6 +12,8 @@ interface InputPanelProps {
   liveActive: boolean;
   liveSupported: boolean;
   liveTranscript: string;
+  liveInterim: string;
+  liveStatus: string | null;
   onToggleLive: () => void;
   onSubmitLive: () => void;
   hasGraph: boolean;
@@ -26,6 +28,8 @@ export default function InputPanel({
   liveActive,
   liveSupported,
   liveTranscript,
+  liveInterim,
+  liveStatus,
   onToggleLive,
   onSubmitLive,
   hasGraph,
@@ -147,9 +151,9 @@ If approved, Procurement creates a purchase order. The ERP checks that the PO va
           ) : (
             <>
               <p className="pf-hint">
-                {hasGraph
-                  ? "Continue the walkthrough and the current map updates as you speak."
-                  : "Record the walkthrough, then submit the transcript to create the map."}
+                Speak and the map builds in real time. You can also direct the
+                assistant: “remove that approval step”, “rename it to…”, “undo
+                that”.
               </p>
               <button
                 className={liveActive ? "pf-danger" : "pf-primary"}
@@ -158,22 +162,32 @@ If approved, Procurement creates a purchase order. The ERP checks that the PO va
               >
                 {liveActive ? "■ Stop listening" : "● Start listening"}
               </button>
+              {liveStatus && <p className="pf-live-status">{liveStatus}</p>}
               <div className="pf-transcript">
-                {liveTranscript || <span className="pf-muted">(transcript will appear here)</span>}
+                {liveTranscript || liveInterim ? (
+                  <>
+                    {liveTranscript}
+                    {liveInterim && (
+                      <span className="pf-muted"> {liveInterim}</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="pf-muted">(transcript will appear here)</span>
+                )}
               </div>
-              {!hasGraph && (
+              {liveTranscript.trim() && (
                 <button
                   className="pf-primary pf-live-submit"
                   type="button"
                   onClick={onSubmitLive}
-                  disabled={
-                    busy ||
-                    liveActive ||
-                    Boolean(blockedReason) ||
-                    !liveTranscript.trim()
-                  }
+                  disabled={busy || liveActive || Boolean(blockedReason)}
+                  title="Replace the diagram with a fresh extraction from the whole transcript"
                 >
-                  {busy ? "Mapping..." : "Map transcript"}
+                  {busy
+                    ? "Mapping..."
+                    : hasGraph
+                      ? "Re-map from full transcript"
+                      : "Map transcript"}
                 </button>
               )}
             </>

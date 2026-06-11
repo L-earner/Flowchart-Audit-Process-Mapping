@@ -14,6 +14,7 @@
     "start": "NODE_ENV=production tsx server/index.ts",
     "typecheck": "tsc --noEmit",
     "verify": "tsx scripts/verify-extract.ts",
+    "verify:live": "tsx scripts/verify-live.ts",
     "postinstall": "npm rebuild better-sqlite3"
   },
   "dependencies": {

@@ -1,5 +1,6 @@
 import type { ProcessGraph, ViewMode } from "../types";
 import type { DiagramSummary } from "../types";
+import type { GraphOp } from "@shared/graphOps.ts";
 
 async function asJson<T>(res: Response): Promise<T> {
   const body = await res.json().catch(() => ({}));
@@ -35,6 +36,57 @@ export async function refine(
     body: JSON.stringify({ graph, transcriptChunk, model }),
   });
   return (await asJson<{ graph: ProcessGraph }>(res)).graph;
+}
+
+// ----- live mode (incremental ops) -----
+
+/** The server forgot the session (restart / TTL) — start a new one and retry. */
+export class SessionExpiredError extends Error {
+  constructor() {
+    super("Live session expired");
+  }
+}
+
+export interface LiveChunkResult {
+  ops: GraphOp[];
+  note?: string;
+  rejected: string[];
+  version: number;
+  graph: ProcessGraph;
+}
+
+export async function liveStart(
+  graph: ProcessGraph | null,
+): Promise<{ sessionId: string; version: number }> {
+  const res = await fetch("/api/live/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ graph }),
+  });
+  return asJson(res);
+}
+
+export async function liveChunk(
+  sessionId: string,
+  chunk: string,
+  graph: ProcessGraph | null,
+  model?: string,
+): Promise<LiveChunkResult> {
+  const res = await fetch("/api/live/chunk", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId, chunk, graph, model }),
+  });
+  if (res.status === 410) throw new SessionExpiredError();
+  return asJson(res);
+}
+
+export async function liveEnd(sessionId: string): Promise<void> {
+  await fetch("/api/live/end", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId }),
+  }).catch(() => {});
 }
 
 export interface Health {

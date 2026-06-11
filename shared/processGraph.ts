@@ -125,6 +125,24 @@ export function normalizeProcessGraph(graph: ProcessGraph): ProcessGraph {
 // required. We intentionally omit `position` — it is computed client-side, not
 // produced by extraction.
 // ---------------------------------------------------------------------------
+/** Control-details sub-schema, shared by PROCESS_GRAPH_SCHEMA and LIVE_OPS_SCHEMA. */
+export const CONTROL_INFO_SCHEMA = {
+  type: "object",
+  properties: {
+    controlType: {
+      type: "string",
+      enum: ["preventive", "detective", "manual", "automated"],
+    },
+    riskAddressed: {
+      type: "string",
+      description: "The risk this control mitigates.",
+    },
+    frequency: { type: "string" },
+  },
+  required: ["controlType", "riskAddressed"],
+  additionalProperties: false,
+} as const;
+
 export const PROCESS_GRAPH_SCHEMA = {
   type: "object",
   properties: {
@@ -168,21 +186,8 @@ export const PROCESS_GRAPH_SCHEMA = {
           },
           description: { type: "string" },
           control: {
-            type: "object",
+            ...CONTROL_INFO_SCHEMA,
             description: "Only for type 'control'.",
-            properties: {
-              controlType: {
-                type: "string",
-                enum: ["preventive", "detective", "manual", "automated"],
-              },
-              riskAddressed: {
-                type: "string",
-                description: "The risk this control mitigates.",
-              },
-              frequency: { type: "string" },
-            },
-            required: ["controlType", "riskAddressed"],
-            additionalProperties: false,
           },
         },
         required: ["id", "type", "label", "actorId"],
