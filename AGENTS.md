@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-This is a Node.js 20 TypeScript application with a React/Vite client and an Express server.
+This is a Node.js 22 TypeScript application with a React/Vite client and an Express server.
 
 - `client/src/`: UI components, styles, API wrappers, graph editing, layout, and export logic.
 - `server/`: Express entry point, API routes, SQLite persistence, document parsing, and LLM providers.

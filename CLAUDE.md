@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Audit Process-Flow Mapper** — turns unstructured walkthrough material (pasted
 transcripts, uploaded PDFs/Word docs/images, or live stakeholder conversation) into an
 editable process-flow diagram on a canvas, for audit teams. Greenfield, runs on Replit
-(Node.js 20).
+(Node.js 22).
 
 ## Commands
 
@@ -16,8 +16,10 @@ editable process-flow diagram on a canvas, for audit teams. Greenfield, runs on 
 - `npm run build` — Vite builds the client to `dist/`.
 - `npm start` — production: serves the built `dist/` + API from Express on :3001.
 - `npm run typecheck` — `tsc --noEmit` over server, client, shared, scripts.
-- `npm run verify` — end-to-end extraction check against a fixture transcript. **Requires `ANTHROPIC_API_KEY`.**
-- `npm run verify:live` — end-to-end live-mode check: replays the fixture in chunks through the incremental-ops pipeline (plus voice-command, undo, manual-edit, and compaction tests). Requires the selected provider's key; `LLM_MODEL=<id>` overrides the model for both verify scripts.
+- `npm run verify` — end-to-end extraction check against a fixture transcript.
+- `npm run verify:live` — end-to-end live-mode check: replays the fixture in chunks through the incremental-ops pipeline (plus voice-command, undo, manual-edit, and compaction tests).
+
+Both verify scripts **require the API key for the selected provider** (default model → `ANTHROPIC_API_KEY`); `LLM_MODEL=<id>` overrides the model. Run them when extraction, prompts, schemas, parsing, or providers change. Before submitting changes, run `npm run typecheck && npm run build`.
 
 Replit run button uses `npm run build && npm start` (single port 3001 → external 80).
 
@@ -27,11 +29,11 @@ Extraction runs through a **selectable model** (picker in the UI sidebar). You n
 for whichever provider the chosen model belongs to:
 
 - `ANTHROPIC_API_KEY` — for Claude models (`claude-opus-4-8`, `claude-sonnet-4-6`).
-- `OPENROUTER_API_KEY` — for open-weight models via OpenRouter (DeepSeek, Llama, Qwen, Mistral).
+- `OPENROUTER_API_KEY` — for models via OpenRouter (OpenAI GPT / gpt-oss, DeepSeek, Llama, Qwen, Mistral).
 
 Set as Replit secrets or in `.env` (see `.env.example`). `/api/health` reports
 `hasAnthropicKey` / `hasOpenRouterKey`. `LLM_MODEL` sets the default model when the request
-doesn't specify one.
+doesn't specify one; `DB_PATH` overrides the SQLite location.
 
 ## Architecture — the one thing to understand first
 
@@ -107,16 +109,24 @@ small **graph operations** (`shared/graphOps.ts`: `GraphOp`, `LIVE_OPS_SCHEMA`,
 - `components/InputPanel.tsx` — Paste / Upload / Live tabs.
 - `components/NodeInspector.tsx` — edit the selected node (label, type, actor, control details).
 - `lib/liveTranscribe.ts` — Web Speech API wrapper for the Live tab (Chrome/Edge only);
-  `App.tsx` debounces transcript chunks into `refineGraph` to grow the diagram as you speak.
+  transcript chunks feed the live-ops pipeline described above (not refine).
+- `lib/graphDiff.ts` — client-side `summarizeChange(prev, next)`: a human-readable count of
+  what an AI "Update current map" changed, shown so the user can keep or undo. **Not the same
+  as `diffGraphs` in `shared/graphOps.ts`** (which produces model notices for live mode).
+- `lib/graphQuality.ts` — `assessGraph`: heuristic quality score + warnings (start/end nodes,
+  disconnected nodes, controls, decisions) surfaced in the UI.
 - `App.tsx` — orchestrates state, extraction, view toggle, editing, save/load, export.
 
 ## Conventions / gotchas
 
 - Imports use the `@shared/*` alias (tsconfig path + Vite alias). Server `.ts` imports keep
   explicit extensions (ESM + tsx).
+- No formatter or linter is configured — match the surrounding style (two-space indent,
+  double quotes, semicolons) and rely on `npm run typecheck`.
 - Node positions are view-specific: toggling flowchart ⇄ swimlane clears stored positions
   (`clearPositions`) so the new view auto-lays out.
-- `better-sqlite3` is a native module; it built cleanly on Replit's Node 20.
+- `better-sqlite3` is a native module; a `postinstall` script (`npm rebuild better-sqlite3`)
+  rebuilds it after install so it matches the running Node version.
 - The Anthropic SDK must stay recent enough to type adaptive thinking + `output_config`
   (currently `^0.102.0`); older majors (≤0.40) will not typecheck.
 - To add/replace an OpenRouter model, edit `shared/models.ts` (`MODELS`) — set `vision: true`
