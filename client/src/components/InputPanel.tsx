@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { SAMPLE_WALKTHROUGH } from "../lib/sample";
 
 export type InputTab = "paste" | "upload" | "live";
 
@@ -38,11 +39,6 @@ export default function InputPanel({
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
-  const sample = `Purchase-to-Pay walkthrough.
-
-A requester raises a purchase requisition in the ERP. The cost-centre manager reviews it against budget and approves or rejects it. This is a manual preventive control on every requisition to prevent unauthorised spend.
-
-If approved, Procurement creates a purchase order. The ERP checks that the PO value does not exceed the approved requisition. After goods are received, Accounts Payable performs a three-way match between the PO, receipt, and invoice. If the match fails, the invoice is parked for investigation. If it passes, the invoice is posted and paid in the weekly payment run.`;
   const incompatibleFiles = files.filter((file) => {
     const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
     const isImage = file.type.startsWith("image/");
@@ -53,13 +49,13 @@ If approved, Procurement creates a purchase order. The ERP checks that the PO va
     <div className="pf-input">
       <div className="pf-tabs">
         <button className={tab === "paste" ? "active" : ""} onClick={() => setTab("paste")}>
-          📝 Paste
+          Paste
         </button>
         <button className={tab === "upload" ? "active" : ""} onClick={() => setTab("upload")}>
-          📎 Upload
+          Upload
         </button>
         <button className={tab === "live" ? "active" : ""} onClick={() => setTab("live")}>
-          🎤 Live
+          Live
         </button>
       </div>
 
@@ -68,7 +64,7 @@ If approved, Procurement creates a purchase order. The ERP checks that the PO va
           <button
             className="pf-sample"
             type="button"
-            onClick={() => setText(sample)}
+            onClick={() => setText(SAMPLE_WALKTHROUGH)}
             disabled={busy}
           >
             Use a sample walkthrough

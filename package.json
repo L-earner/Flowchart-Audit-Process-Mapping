@@ -20,6 +20,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",
     "@dagrejs/dagre": "^3.0.0",
+    "@fontsource-variable/inter": "^5.2.8",
     "@xyflow/react": "^12.3.5",
     "better-sqlite3": "^11.8.1",
     "dotenv": "^16.6.1",

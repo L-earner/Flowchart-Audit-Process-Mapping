@@ -53,61 +53,194 @@ function rfNodeType(t: ProcessNode["type"]): string {
   return "step";
 }
 
-type Center = { x: number; y: number };
+type Box = { x1: number; y1: number; x2: number; y2: number };
 
-/** Centre point of each laid-out node, keyed by id (lanes excluded). */
-function centersFromNodes(nodes: RFNode[]): Map<string, Center> {
-  const centers = new Map<string, Center>();
+const centerOf = (b: Box) => ({ x: (b.x1 + b.x2) / 2, y: (b.y1 + b.y2) / 2 });
+
+/** Bounding box of each laid-out node, keyed by id (lanes excluded). */
+function boxesFromNodes(nodes: RFNode[]): Map<string, Box> {
+  const boxes = new Map<string, Box>();
   for (const n of nodes) {
     if (n.id.startsWith("lane__")) continue;
     const { width, height } = sizeFor(n.data.node.type);
-    centers.set(n.id, {
-      x: n.position.x + width / 2,
-      y: n.position.y + height / 2,
+    boxes.set(n.id, {
+      x1: n.position.x,
+      y1: n.position.y,
+      x2: n.position.x + width,
+      y2: n.position.y + height,
     });
   }
-  return centers;
+  return boxes;
 }
+
+const LOOP_BASE_OFFSET = 56;
+const LOOP_CLEARANCE = 36;
+const LOOP_MAX_OFFSET = 260;
+const AXIS_SLACK = 40;
+
+/** Swap x/y so the loop router can work on either axis. */
+const transpose = (b: Box): Box => ({ x1: b.y1, y1: b.x1, x2: b.y2, y2: b.x2 });
 
 /**
- * Pick which of the four side-dots an edge attaches to, based on where the
- * target sits relative to the source: side dots (right→left) when it is mostly
- * beside, top/bottom dots otherwise. Handle ids match those in nodes/index.tsx
- * (right source = "r", left target = "l"; top/bottom have no id).
+ * A back-edge loops out of one side; its long return segment runs at
+ * side-of-nodes + offset. Widen the offset until that corridor clears every
+ * node lying in the edge's band, and pick whichever side gets clear with the
+ * smaller detour. Works in x; callers transpose for a vertical-axis loop.
  */
-function pickHandles(
-  source: Center | undefined,
-  target: Center | undefined,
-): { sourceHandle?: string; targetHandle?: string } {
-  if (!source || !target) return {};
-  const dx = target.x - source.x;
-  const dy = target.y - source.y;
-  if (Math.abs(dx) > Math.abs(dy) && dx > 0) {
-    return { sourceHandle: "r", targetHandle: "l" };
+function routeLoop(
+  src: Box,
+  tgt: Box,
+  obstacles: Box[],
+): { side: "l" | "r"; offset: number } {
+  const yTop = Math.min(centerOf(tgt).y, centerOf(src).y);
+  const yBottom = Math.max(centerOf(tgt).y, centerOf(src).y);
+  const inBand = obstacles.filter((b) => b.y2 > yTop && b.y1 < yBottom);
+
+  const baseR = Math.max(src.x2, tgt.x2);
+  let corridorR = baseR + LOOP_BASE_OFFSET;
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const b of inBand) {
+      if (b.x1 < corridorR + 8 && b.x2 > baseR && b.x2 + LOOP_CLEARANCE > corridorR) {
+        corridorR = b.x2 + LOOP_CLEARANCE;
+        changed = true;
+      }
+    }
   }
-  return {}; // default: exit bottom, enter top
+
+  const baseL = Math.min(src.x1, tgt.x1);
+  let corridorL = baseL - LOOP_BASE_OFFSET;
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const b of inBand) {
+      if (b.x2 > corridorL - 8 && b.x1 < baseL && b.x1 - LOOP_CLEARANCE < corridorL) {
+        corridorL = b.x1 - LOOP_CLEARANCE;
+        changed = true;
+      }
+    }
+  }
+
+  const offR = corridorR - baseR;
+  const offL = baseL - corridorL;
+  return offR <= offL
+    ? { side: "r", offset: Math.min(offR, LOOP_MAX_OFFSET) }
+    : { side: "l", offset: Math.min(offL, LOOP_MAX_OFFSET) };
 }
 
-function buildEdges(graph: ProcessGraph, centers: Map<string, Center>): RFEdge[] {
-  return graph.edges.map((e) => ({
+type Route = { sourceHandle?: string; targetHandle?: string; offset: number };
+
+/**
+ * Pick which side each edge attaches to. Handle ids ("t"/"b"/"l"/"r") match
+ * nodes/index.tsx; all handles are connectable both ways (loose connection
+ * mode). Routing is judged along the view's flow axis — flowchart flows
+ * top→bottom, swimlane flows left→right; distance across the axis (e.g.
+ * between lanes) says nothing about flow direction:
+ * - forward → out the flow side, in the back side (b→t / r→l);
+ * - same rank → hop across (side chosen by which way the target sits);
+ * - backward → a straight return line if the direct corridor is clear of
+ *   nodes, otherwise a same-side loop routed around the obstacles.
+ */
+function routeEdge(
+  src: Box | undefined,
+  tgt: Box | undefined,
+  boxes: Map<string, Box>,
+  srcId: string,
+  tgtId: string,
+  axis: "TB" | "LR",
+): Route {
+  if (!src || !tgt) return { offset: 24 };
+  const dx = centerOf(tgt).x - centerOf(src).x;
+  const dy = centerOf(tgt).y - centerOf(src).y;
+  const forward = axis === "LR" ? dx : dy;
+  const across = axis === "LR" ? dy : dx;
+  // Handle pairs relative to the flow axis.
+  const [out, into, sidePos, sideNeg] =
+    axis === "LR"
+      ? (["r", "l", "b", "t"] as const)
+      : (["b", "t", "r", "l"] as const);
+  const obstacles = [...boxes.entries()]
+    .filter(([id]) => id !== srcId && id !== tgtId)
+    .map(([, b]) => b);
+
+  if (forward > AXIS_SLACK) {
+    // Forward across lanes: the last segment runs into the target's back side
+    // at the target's cross-position. If another node sits in that approach
+    // strip, come in through the target's top/bottom instead of through it.
+    if (axis === "LR" && Math.abs(dy) > AXIS_SLACK) {
+      const cy = centerOf(tgt).y;
+      const stripBlocked = obstacles.some(
+        (b) => b.x2 > src.x2 && b.x1 < tgt.x1 && b.y1 < cy + 20 && b.y2 > cy - 20,
+      );
+      if (stripBlocked) {
+        return { sourceHandle: "r", targetHandle: dy < 0 ? "b" : "t", offset: 24 };
+      }
+    }
+    return { sourceHandle: out, targetHandle: into, offset: 24 };
+  }
+  if (forward >= -AXIS_SLACK || Math.abs(across) > Math.abs(forward)) {
+    // Same rank (or overwhelmingly sideways): hop across the axis.
+    return across >= 0
+      ? { sourceHandle: sidePos, targetHandle: sideNeg, offset: 24 }
+      : { sourceHandle: sideNeg, targetHandle: sidePos, offset: 24 };
+  }
+
+  // Backward. Try a straight return (in the back side, out the front side of
+  // the target); take it only when the direct corridor is free of nodes.
+  const band: Box = {
+    x1: Math.min(src.x1, tgt.x1),
+    y1: Math.min(src.y1, tgt.y1),
+    x2: Math.max(src.x2, tgt.x2),
+    y2: Math.max(src.y2, tgt.y2),
+  };
+  const blocked = obstacles.some(
+    (b) => b.x1 < band.x2 && b.x2 > band.x1 && b.y1 < band.y2 && b.y2 > band.y1,
+  );
+  if (!blocked) {
+    return { sourceHandle: into, targetHandle: out, offset: 32 };
+  }
+  // Loop around: corridor runs across the axis, widened past obstacles.
+  const flip = axis === "LR" ? transpose : (b: Box) => b;
+  const { side, offset } = routeLoop(flip(src), flip(tgt), obstacles.map(flip));
+  const mapped = axis === "LR" ? (side === "r" ? "b" : "t") : side;
+  return { sourceHandle: mapped, targetHandle: mapped, offset };
+}
+
+function buildEdges(
+  graph: ProcessGraph,
+  boxes: Map<string, Box>,
+  axis: "TB" | "LR",
+): RFEdge[] {
+  return graph.edges.map((e) => {
+    const { offset, ...handles } = routeEdge(
+      boxes.get(e.source),
+      boxes.get(e.target),
+      boxes,
+      e.source,
+      e.target,
+      axis,
+    );
+    return {
     id: e.id,
     source: e.source,
     target: e.target,
     label: e.label,
     type: "smoothstep",
+    pathOptions: { borderRadius: 12, offset },
     reconnectable: true,
     interactionWidth: 28,
-    ...pickHandles(centers.get(e.source), centers.get(e.target)),
-    style: { strokeWidth: 1.6, stroke: "#64748b" },
-    labelBgPadding: [6, 3] as [number, number],
-    labelBgStyle: { fill: "#fff", fillOpacity: 0.9 },
+    ...handles,
+    style: { strokeWidth: 1.8, stroke: "#8b93a5" },
+    labelStyle: { fontSize: 11, fontWeight: 550, fill: "#525a6a" },
+    labelBgPadding: [7, 4] as [number, number],
+    labelBgStyle: { fill: "#fff", fillOpacity: 0.95 },
     markerEnd: {
       type: MarkerType.ArrowClosed,
-      width: 24,
-      height: 24,
-      color: "#64748b",
+      width: 22,
+      height: 22,
+      color: "#8b93a5",
     },
-  }));
+    };
+  });
 }
 
 function rangesOverlap(
@@ -174,7 +307,7 @@ function resolveFlowchartCollisions(nodes: RFNode[]): RFNode[] {
 
 function layoutFlowchart(graph: ProcessGraph): LayoutResult {
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "TB", nodesep: 65, ranksep: 90 });
+  g.setGraph({ rankdir: "TB", nodesep: 80, ranksep: 110 });
   g.setDefaultEdgeLabel(() => ({}));
 
   const actorName = new Map(graph.actors.map((a) => [a.id, a.name]));
@@ -193,7 +326,7 @@ function layoutFlowchart(graph: ProcessGraph): LayoutResult {
     };
   }));
 
-  return { nodes, edges: buildEdges(graph, centersFromNodes(nodes)), lanes: [] };
+  return { nodes, edges: buildEdges(graph, boxesFromNodes(nodes), "TB"), lanes: [] };
 }
 
 const LANE_LABEL_OFFSET = 180;
@@ -222,7 +355,7 @@ function layoutSwimlane(graph: ProcessGraph): LayoutResult {
 
   // Use dagre LR purely to get the horizontal (flow) ordering / x positions.
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "LR", nodesep: 40, ranksep: 90, marginx: 40 });
+  g.setGraph({ rankdir: "LR", nodesep: 50, ranksep: 110, marginx: 40 });
   g.setDefaultEdgeLabel(() => ({}));
   for (const n of graph.nodes) g.setNode(n.id, sizeFor(n.type));
   for (const e of graph.edges) g.setEdge(e.source, e.target);
@@ -300,7 +433,7 @@ function layoutSwimlane(graph: ProcessGraph): LayoutResult {
 
   return {
     nodes: [...laneNodes, ...stepNodes],
-    edges: buildEdges(graph, centersFromNodes(stepNodes)),
+    edges: buildEdges(graph, boxesFromNodes(stepNodes), "LR"),
     lanes,
   };
 }

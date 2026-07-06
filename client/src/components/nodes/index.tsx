@@ -7,15 +7,18 @@ import { useEffect, useRef, useState } from "react";
 import type { ProcessNodeData } from "../../lib/layout";
 import { useNodeEdit } from "./nodeEditContext";
 
-const handleStyle = { width: 12, height: 12, background: "#64748b" };
-
+/**
+ * One connectable handle per side. The canvas runs in loose connection mode,
+ * so every handle works as both source and target; layout.ts picks the pair
+ * per edge by direction (ids "t"/"b"/"l"/"r").
+ */
 function Handles() {
   return (
     <>
-      <Handle type="target" position={Position.Top} style={handleStyle} />
-      <Handle type="source" position={Position.Bottom} style={handleStyle} />
-      <Handle type="target" position={Position.Left} id="l" style={handleStyle} />
-      <Handle type="source" position={Position.Right} id="r" style={handleStyle} />
+      <Handle type="source" position={Position.Top} id="t" />
+      <Handle type="source" position={Position.Bottom} id="b" />
+      <Handle type="source" position={Position.Left} id="l" />
+      <Handle type="source" position={Position.Right} id="r" />
     </>
   );
 }
@@ -100,6 +103,7 @@ export function StepNode({ data, selected }: NodeProps) {
   return (
     <div className={`pf-node pf-step ${isSystem ? "pf-system" : ""} ${selected ? "pf-selected" : ""}`}>
       <Handles />
+      {isSystem && <span className="pf-node-kind">System</span>}
       <EditableLabel nodeId={node.id} label={node.label} />
       {actorName && <div className="pf-actor">{actorName}</div>}
     </div>
@@ -135,7 +139,12 @@ export function ControlNode({ data, selected }: NodeProps) {
   return (
     <div className={`pf-node pf-control ${selected ? "pf-selected" : ""}`}>
       <Handles />
-      <div className="pf-control-badge">🛡 CONTROL</div>
+      <div className="pf-control-badge">
+        <svg width="10" height="11" viewBox="0 0 10 11" fill="currentColor" aria-hidden="true">
+          <path d="M5 0 9.5 1.8v3.1c0 2.7-1.9 4.8-4.5 6.1C2.4 9.7.5 7.6.5 4.9V1.8L5 0z" />
+        </svg>
+        Control
+      </div>
       <EditableLabel nodeId={node.id} label={node.label} />
       {ctrl && (
         <div className="pf-control-meta">
@@ -145,7 +154,7 @@ export function ControlNode({ data, selected }: NodeProps) {
       )}
       {ctrl?.riskAddressed && (
         <div className="pf-risk" title={ctrl.riskAddressed}>
-          ⚠ {ctrl.riskAddressed}
+          <strong>Risk:</strong> {ctrl.riskAddressed}
         </div>
       )}
       {actorName && <div className="pf-actor">{actorName}</div>}

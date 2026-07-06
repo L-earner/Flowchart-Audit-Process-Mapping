@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, type MouseEvent as ReactMouseEvent } from "
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   Panel,
@@ -10,6 +11,7 @@ import {
   addEdge,
   applyNodeChanges,
   reconnectEdge,
+  ConnectionMode,
   type Connection,
   type Edge,
   type NodeChange,
@@ -225,15 +227,22 @@ export default function Canvas({
         onInit={(instance) => {
           flowRef.current = instance;
         }}
+        connectionMode={ConnectionMode.Loose}
         minZoom={0.05}
         maxZoom={2}
         fitView
         fitViewOptions={{ padding: 0.08, minZoom: 0.05, maxZoom: 1 }}
         proOptions={{ hideAttribution: true }}
       >
-        <Background gap={18} color="#eef2f7" />
+        <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} color="#d7dbe4" />
         <Controls fitViewOptions={{ padding: 0.08, minZoom: 0.05, maxZoom: 1 }} />
-        <MiniMap pannable zoomable />
+        <MiniMap
+          pannable
+          zoomable
+          maskColor="rgba(243, 244, 247, 0.75)"
+          nodeColor="#e0e3ea"
+          nodeStrokeColor="#c3c8d4"
+        />
         <Panel position="top-left">
           <div className="pf-canvas-help">
             {selectedNode ? (

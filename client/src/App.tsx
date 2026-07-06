@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import type {
   ProcessEdge,
   ProcessGraph,
@@ -30,7 +37,25 @@ import RefinePanel from "./components/RefinePanel";
 import ActorPanel from "./components/ActorPanel";
 import { assessGraph } from "./lib/graphQuality";
 import { summarizeChange } from "./lib/graphDiff";
+import { SAMPLE_WALKTHROUGH } from "./lib/sample";
 import "./styles.css";
+
+function Logo() {
+  return (
+    <svg className="pf-logo" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+      <rect width="24" height="24" rx="6" fill="#4f46e5" />
+      <rect x="5" y="5" width="5.5" height="5.5" rx="1.5" fill="#fff" />
+      <rect x="13.5" y="13.5" width="5.5" height="5.5" rx="2.75" fill="#fff" />
+      <path
+        d="M10.5 7.75h3.75a2 2 0 0 1 2 2v3.75"
+        fill="none"
+        stroke="#fff"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 interface UndoEntry {
   graph: ProcessGraph;
@@ -105,6 +130,11 @@ export default function App() {
       if (fallback) setModel(fallback.id);
     }
   }, [healthInfo, model]);
+  useEffect(() => {
+    if (!refineNote) return;
+    const timer = setTimeout(() => setRefineNote(null), 8000);
+    return () => clearTimeout(timer);
+  }, [refineNote]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
       if (!dirty) return;
@@ -502,7 +532,11 @@ export default function App() {
   return (
     <div className="pf-app">
       <header className="pf-header">
-        <div className="pf-brand">🔎 Audit Process-Flow Mapper</div>
+        <div className="pf-brand">
+          <Logo />
+          <span className="pf-wordmark">Process-Flow Mapper</span>
+          <span className="pf-brand-chip">Audit</span>
+        </div>
         {graph && (
           <input
             className="pf-title-input"
@@ -541,8 +575,12 @@ export default function App() {
               >
                 Redo
               </button>
-              <button onClick={handleSave} disabled={busy}>
-                {diagramId ? (dirty ? "Save*" : "Saved") : "Save"}
+              <button
+                className={dirty ? "accent" : ""}
+                onClick={handleSave}
+                disabled={busy}
+              >
+                {diagramId ? (dirty ? "Save" : "Saved") : "Save"}
               </button>
               <button onClick={() => exportPng(graph).catch((e) => setError(e.message))}>
                 PNG
@@ -554,17 +592,32 @@ export default function App() {
         </div>
       </header>
 
-      {error && (
-        <div className="pf-error" onClick={() => setError(null)}>
-          {error} <span className="pf-muted">(click to dismiss)</span>
-        </div>
-      )}
-
-      {refineNote && (
-        <div className="pf-refine-note" onClick={() => setRefineNote(null)}>
-          {refineNote} <span className="pf-muted">(click to dismiss)</span>
-        </div>
-      )}
+      <div className="pf-toasts">
+        {error && (
+          <div className="pf-toast danger" role="alert">
+            <div>{error}</div>
+            <button
+              className="pf-toast-close"
+              aria-label="Dismiss"
+              onClick={() => setError(null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
+        {refineNote && (
+          <div className="pf-toast" role="status">
+            <div>{refineNote}</div>
+            <button
+              className="pf-toast-close"
+              aria-label="Dismiss"
+              onClick={() => setRefineNote(null)}
+            >
+              ×
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="pf-body">
         <aside className="pf-sidebar">
@@ -715,14 +768,57 @@ export default function App() {
                 setSelectedEdgeId(null);
               }}
             />
+          ) : busy ? (
+            <div className="pf-skeleton" role="status" aria-live="polite">
+              <div className="pf-skeleton-flow">
+                <div className="pf-skeleton-node" />
+                <div className="pf-skeleton-link" />
+                <div className="pf-skeleton-node wide" />
+                <div className="pf-skeleton-link" />
+                <div className="pf-skeleton-node" />
+              </div>
+              <div className="pf-skeleton-label">Mapping the process…</div>
+              <div className="pf-skeleton-sub">
+                The model is reading the walkthrough and drawing the flow.
+              </div>
+            </div>
           ) : (
             <div className="pf-empty">
+              <svg
+                className="pf-empty-art"
+                width="220"
+                height="120"
+                viewBox="0 0 220 120"
+                fill="none"
+                aria-hidden="true"
+              >
+                <rect x="38" y="8" width="76" height="34" rx="9" fill="#fff" stroke="#d5d9e2" strokeWidth="1.5" />
+                <rect x="38" y="8" width="3" height="34" rx="1.5" fill="#4f46e5" />
+                <path d="M76 42v13" stroke="#d5d9e2" strokeWidth="1.5" strokeDasharray="3 3" />
+                <rect x="61" y="56" width="30" height="30" rx="7" transform="rotate(45 76 71)" fill="#f5f3ff" stroke="#a78bfa" strokeWidth="1.5" />
+                <path d="M97 71h30" stroke="#d5d9e2" strokeWidth="1.5" strokeDasharray="3 3" />
+                <rect x="128" y="54" width="84" height="34" rx="9" fill="#fffdf5" stroke="#fde68a" strokeWidth="1.5" />
+                <rect x="128" y="54" width="3" height="34" rx="1.5" fill="#d97706" />
+                <path d="M137 65l4-2 4 2v4.5c0 2.6-1.7 4.4-4 5.5-2.3-1.1-4-2.9-4-5.5V65z" fill="#d97706" opacity="0.85" />
+              </svg>
+              <h2>Map a process from any walkthrough</h2>
               <p>
-                Paste a walkthrough transcript, upload a document or image, or start a
-                live conversation — and the process flow appears here.
+                Paste a transcript, upload a document or image, or start a live
+                conversation — the flow appears here as an editable diagram with
+                actors, decisions, and control points.
               </p>
+              <button
+                className="pf-empty-cta"
+                type="button"
+                disabled={busy || keyMissing}
+                onClick={() => void handleExtract({ text: SAMPLE_WALKTHROUGH })}
+              >
+                Try a sample walkthrough
+              </button>
+              <div className="pf-empty-alt">or use the panel on the left to start</div>
             </div>
           )}
+          {busy && graph && <div className="pf-progress" aria-hidden="true" />}
         </main>
 
         {graph && (
@@ -731,7 +827,13 @@ export default function App() {
               <section className="pf-quality">
                 <div className="pf-quality-head">
                   <h3>Map quality</h3>
-                  <strong>{quality.score}%</strong>
+                  <div
+                    className="pf-quality-ring"
+                    style={{ "--score": quality.score } as CSSProperties}
+                    title={`${quality.score}% of mapping checks passed`}
+                  >
+                    <span>{quality.score}</span>
+                  </div>
                 </div>
                 <div className="pf-quality-grid">
                   {quality.checks.map((check) => (
