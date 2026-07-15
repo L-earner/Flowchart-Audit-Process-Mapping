@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import { extractRouter } from "./routes/extract.ts";
 import { diagramsRouter } from "./routes/diagrams.ts";
 import { liveRouter } from "./routes/live.ts";
+import { isDemoMode } from "./lib/demoMode.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3001);
@@ -18,6 +19,7 @@ app.get("/api/health", (_req, res) => {
     ok: true,
     hasAnthropicKey: Boolean(process.env.ANTHROPIC_API_KEY),
     hasOpenRouterKey: Boolean(process.env.OPENROUTER_API_KEY),
+    demoMode: isDemoMode(),
   });
 });
 
@@ -34,7 +36,9 @@ if (existsSync(distDir)) {
 
 app.listen(PORT, () => {
   console.log(`[server] listening on http://localhost:${PORT}`);
-  if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENROUTER_API_KEY) {
+  if (isDemoMode()) {
+    console.log("[server] DEMO_MODE is on — saving, deleting, and AI extraction are disabled.");
+  } else if (!process.env.ANTHROPIC_API_KEY && !process.env.OPENROUTER_API_KEY) {
     console.warn(
       "[server] WARNING: no ANTHROPIC_API_KEY or OPENROUTER_API_KEY set — extraction will fail until one is.",
     );

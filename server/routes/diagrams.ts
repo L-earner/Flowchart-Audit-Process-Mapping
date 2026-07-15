@@ -12,6 +12,7 @@ import {
   type ProcessGraph,
   type ViewMode,
 } from "@shared/processGraph.ts";
+import { demoModeGuard } from "../lib/demoMode.ts";
 
 export const diagramsRouter = Router();
 
@@ -27,7 +28,7 @@ diagramsRouter.get("/:id", (req, res) => {
   });
 });
 
-diagramsRouter.post("/", (req, res) => {
+diagramsRouter.post("/", demoModeGuard, (req, res) => {
   const { graph, viewMode } = req.body as {
     graph?: ProcessGraph;
     viewMode?: ViewMode;
@@ -39,7 +40,7 @@ diagramsRouter.post("/", (req, res) => {
   res.status(201).json({ diagram });
 });
 
-diagramsRouter.put("/:id", (req, res) => {
+diagramsRouter.put("/:id", demoModeGuard, (req, res) => {
   const { graph, viewMode } = req.body as {
     graph?: ProcessGraph;
     viewMode?: ViewMode;
@@ -56,7 +57,7 @@ diagramsRouter.put("/:id", (req, res) => {
   res.json({ diagram });
 });
 
-diagramsRouter.delete("/:id", (req, res) => {
+diagramsRouter.delete("/:id", demoModeGuard, (req, res) => {
   if (!deleteDiagram(req.params.id)) {
     return res.status(404).json({ error: "Diagram not found." });
   }

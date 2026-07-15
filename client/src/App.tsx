@@ -107,10 +107,17 @@ export default function App() {
   const modelRef = useRef<string>(model);
   modelRef.current = model;
 
+  const demoMode = healthInfo?.demoMode ?? false;
+
   const refreshList = useCallback(() => {
     api.listDiagrams().then(setDiagrams).catch(() => {});
   }, []);
   useEffect(refreshList, [refreshList]);
+  useEffect(() => {
+    if (demoMode && !graph && !diagramId && diagrams.length > 0) {
+      void handleLoad(diagrams[0].id);
+    }
+  }, [demoMode, diagrams, graph, diagramId]);
   useEffect(() => {
     api.health().then(setHealthInfo).catch(() => {});
   }, []);
@@ -536,6 +543,11 @@ export default function App() {
           <Logo />
           <span className="pf-wordmark">Process-Flow Mapper</span>
           <span className="pf-brand-chip">Audit</span>
+          {demoMode && (
+            <span className="pf-brand-chip pf-demo-chip" title="Read-only example — edits aren't saved and reset on reload.">
+              Demo
+            </span>
+          )}
         </div>
         {graph && (
           <input
@@ -575,18 +587,20 @@ export default function App() {
               >
                 Redo
               </button>
-              <button
-                className={dirty ? "accent" : ""}
-                onClick={handleSave}
-                disabled={busy}
-              >
-                {diagramId ? (dirty ? "Save" : "Saved") : "Save"}
-              </button>
+              {!demoMode && (
+                <button
+                  className={dirty ? "accent" : ""}
+                  onClick={handleSave}
+                  disabled={busy}
+                >
+                  {diagramId ? (dirty ? "Save" : "Saved") : "Save"}
+                </button>
+              )}
               <button onClick={() => exportPng(graph).catch((e) => setError(e.message))}>
                 PNG
               </button>
               <button onClick={() => exportJson(graph)}>JSON</button>
-              <button onClick={handleNew}>New</button>
+              {!demoMode && <button onClick={handleNew}>New</button>}
             </>
           )}
         </div>
@@ -621,75 +635,85 @@ export default function App() {
 
       <div className="pf-body">
         <aside className="pf-sidebar">
-          <div className="pf-model">
-            <label htmlFor="pf-model-select">Model</label>
-            <select
-              id="pf-model-select"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-            >
-              <optgroup label="Anthropic (Claude)">
-                {MODELS.filter((m) => m.provider === "anthropic").map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="OpenRouter">
-                {MODELS.filter((m) => m.provider === "openrouter").map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
-            {keyMissing ? (
-              <p className="pf-key-warn">
-                ⚠ No {provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY"}{" "}
-                set — add it as a secret to use this model.
-              </p>
-            ) : (
-              <p className="pf-hint">
-                {selectedModel?.note ??
-                  (provider === "openrouter"
-                    ? "Model via OpenRouter."
-                    : "Claude with schema-enforced extraction.")}
-              </p>
-            )}
-          </div>
-          <InputPanel
-            busy={busy}
-            supportsImages={Boolean(selectedModel?.vision)}
-            supportsPdf={provider === "anthropic"}
-            blockedReason={
-              keyMissing
-                ? `Add ${provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY"} to use this model.`
-                : undefined
-            }
-            onExtract={handleExtract}
-            liveActive={liveActive}
-            liveSupported={liveSupported}
-            liveTranscript={liveTranscript}
-            liveInterim={liveInterim}
-            liveStatus={liveStatus}
-            onToggleLive={() => void toggleLive()}
-            onSubmitLive={submitLiveTranscript}
-            hasGraph={Boolean(graph)}
-          />
-          {graph && (
-            <RefinePanel
-              busy={busy}
-              blockedReason={
-                keyMissing
-                  ? `Add ${provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY"} to update this map.`
-                  : undefined
-              }
-              voiceSupported={liveSupported}
-              onRefine={handleRefine}
-            />
+          {demoMode ? (
+            <p className="pf-hint pf-demo-note">
+              This is a read-only public demo. You can explore and edit the
+              diagram on the canvas, but changes aren't saved — reload the
+              page to reset to the example below.
+            </p>
+          ) : (
+            <>
+              <div className="pf-model">
+                <label htmlFor="pf-model-select">Model</label>
+                <select
+                  id="pf-model-select"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                >
+                  <optgroup label="Anthropic (Claude)">
+                    {MODELS.filter((m) => m.provider === "anthropic").map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="OpenRouter">
+                    {MODELS.filter((m) => m.provider === "openrouter").map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+                {keyMissing ? (
+                  <p className="pf-key-warn">
+                    ⚠ No {provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY"}{" "}
+                    set — add it as a secret to use this model.
+                  </p>
+                ) : (
+                  <p className="pf-hint">
+                    {selectedModel?.note ??
+                      (provider === "openrouter"
+                        ? "Model via OpenRouter."
+                        : "Claude with schema-enforced extraction.")}
+                  </p>
+                )}
+              </div>
+              <InputPanel
+                busy={busy}
+                supportsImages={Boolean(selectedModel?.vision)}
+                supportsPdf={provider === "anthropic"}
+                blockedReason={
+                  keyMissing
+                    ? `Add ${provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY"} to use this model.`
+                    : undefined
+                }
+                onExtract={handleExtract}
+                liveActive={liveActive}
+                liveSupported={liveSupported}
+                liveTranscript={liveTranscript}
+                liveInterim={liveInterim}
+                liveStatus={liveStatus}
+                onToggleLive={() => void toggleLive()}
+                onSubmitLive={submitLiveTranscript}
+                hasGraph={Boolean(graph)}
+              />
+              {graph && (
+                <RefinePanel
+                  busy={busy}
+                  blockedReason={
+                    keyMissing
+                      ? `Add ${provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY"} to update this map.`
+                      : undefined
+                  }
+                  voiceSupported={liveSupported}
+                  onRefine={handleRefine}
+                />
+              )}
+            </>
           )}
           <div className="pf-saved">
-            <h4>Saved diagrams</h4>
+            <h4>{demoMode ? "Example diagrams" : "Saved diagrams"}</h4>
             {diagrams.length === 0 && <p className="pf-muted">None yet.</p>}
             <ul>
               {diagrams.map((d) => (
@@ -704,7 +728,7 @@ export default function App() {
                 </li>
               ))}
             </ul>
-            {diagramId && (
+            {!demoMode && diagramId && (
               <button
                 className="pf-delete-selected"
                 onClick={() => handleDeleteDiagram(diagramId)}
@@ -801,21 +825,33 @@ export default function App() {
                 <rect x="128" y="54" width="3" height="34" rx="1.5" fill="#d97706" />
                 <path d="M137 65l4-2 4 2v4.5c0 2.6-1.7 4.4-4 5.5-2.3-1.1-4-2.9-4-5.5V65z" fill="#d97706" opacity="0.85" />
               </svg>
-              <h2>Map a process from any walkthrough</h2>
-              <p>
-                Paste a transcript, upload a document or image, or start a live
-                conversation — the flow appears here as an editable diagram with
-                actors, decisions, and control points.
-              </p>
-              <button
-                className="pf-empty-cta"
-                type="button"
-                disabled={busy || keyMissing}
-                onClick={() => void handleExtract({ text: SAMPLE_WALKTHROUGH })}
-              >
-                Try a sample walkthrough
-              </button>
-              <div className="pf-empty-alt">or use the panel on the left to start</div>
+              {demoMode ? (
+                <>
+                  <h2>Explore an example process map</h2>
+                  <p>
+                    Pick an example from the sidebar to see the diagram. You
+                    can move nodes and try edits, but nothing here is saved.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2>Map a process from any walkthrough</h2>
+                  <p>
+                    Paste a transcript, upload a document or image, or start a live
+                    conversation — the flow appears here as an editable diagram with
+                    actors, decisions, and control points.
+                  </p>
+                  <button
+                    className="pf-empty-cta"
+                    type="button"
+                    disabled={busy || keyMissing}
+                    onClick={() => void handleExtract({ text: SAMPLE_WALKTHROUGH })}
+                  >
+                    Try a sample walkthrough
+                  </button>
+                  <div className="pf-empty-alt">or use the panel on the left to start</div>
+                </>
+              )}
             </div>
           )}
           {busy && graph && <div className="pf-progress" aria-hidden="true" />}

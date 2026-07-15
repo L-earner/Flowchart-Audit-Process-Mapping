@@ -104,6 +104,18 @@ textarea:focus-visible {
   border-radius: 20px;
   padding: 2px 8px;
 }
+.pf-demo-chip {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+.pf-demo-note {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  margin-bottom: 4px;
+}
 .pf-title-input {
   flex: 1;
   max-width: 420px;

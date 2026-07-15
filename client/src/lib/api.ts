@@ -93,6 +93,7 @@ export interface Health {
   ok: boolean;
   hasAnthropicKey: boolean;
   hasOpenRouterKey: boolean;
+  demoMode: boolean;
 }
 
 export async function health(): Promise<Health> {

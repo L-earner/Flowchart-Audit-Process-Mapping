@@ -6,6 +6,7 @@ import {
 } from "@shared/processGraph.ts";
 import { createSession, endSession, enqueue, getSession } from "../lib/liveSession.ts";
 import { processChunk } from "../lib/liveOps.ts";
+import { demoModeGuard } from "../lib/demoMode.ts";
 
 export const liveRouter = Router();
 
@@ -29,7 +30,7 @@ function validateBody(graph: unknown): { graph?: ProcessGraph; error?: string } 
  * JSON: { graph?: ProcessGraph | null }
  * Opens a live session seeded with the current graph (or empty).
  */
-liveRouter.post("/start", (req, res) => {
+liveRouter.post("/start", demoModeGuard, (req, res) => {
   const { graph, error } = validateBody((req.body as { graph?: unknown })?.graph);
   if (error) return res.status(400).json({ error });
   const session = createSession(graph ?? EMPTY_GRAPH);
@@ -43,7 +44,7 @@ liveRouter.post("/start", (req, res) => {
  * against its mirror to pick up manual canvas edits. Returns the ops the
  * model emitted plus the updated server graph.
  */
-liveRouter.post("/chunk", async (req, res) => {
+liveRouter.post("/chunk", demoModeGuard, async (req, res) => {
   const { sessionId, chunk, graph, model } = req.body as {
     sessionId?: string;
     chunk?: string;

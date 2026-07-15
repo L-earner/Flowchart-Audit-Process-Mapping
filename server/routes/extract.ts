@@ -8,6 +8,7 @@ import {
   validateProcessGraph,
   type ProcessGraph,
 } from "@shared/processGraph.ts";
+import { demoModeGuard } from "../lib/demoMode.ts";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -21,7 +22,7 @@ export const extractRouter = Router();
  * multipart/form-data: optional `text` field + any number of `files`.
  * Returns the extracted ProcessGraph.
  */
-extractRouter.post("/", upload.array("files"), async (req, res) => {
+extractRouter.post("/", demoModeGuard, upload.array("files"), async (req, res) => {
   try {
     const inputs: ExtractInput[] = [];
 
@@ -52,7 +53,7 @@ extractRouter.post("/", upload.array("files"), async (req, res) => {
  * JSON: { graph: ProcessGraph, transcriptChunk: string }
  * Returns the updated ProcessGraph for live transcript or explicit instructions.
  */
-extractRouter.post("/refine", async (req, res) => {
+extractRouter.post("/refine", demoModeGuard, async (req, res) => {
   try {
     const { graph, transcriptChunk, model } = req.body as {
       graph?: ProcessGraph;
