@@ -35,6 +35,10 @@ Set as Replit secrets or in `.env` (see `.env.example`). `/api/health` reports
 `hasAnthropicKey` / `hasOpenRouterKey`. `LLM_MODEL` sets the default model when the request
 doesn't specify one; `DB_PATH` overrides the SQLite location.
 
+`DEMO_MODE=true` puts the server in public read-only demo mode: `demoModeGuard`
+(`server/lib/demoMode.ts`) returns 403 on diagram create/update/delete, extract, refine, and
+live start/chunk, regardless of whether API keys are set.
+
 ## Architecture — the one thing to understand first
 
 Everything flows through a single canonical data model, **`ProcessGraph`**, defined once
