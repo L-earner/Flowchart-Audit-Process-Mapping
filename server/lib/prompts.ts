@@ -19,11 +19,24 @@ const CORE_GUIDELINES = `Guidelines:
 - Edge ids and node ids must be unique and stable. Edges reference node ids only.
 - Be faithful to the source; do not invent steps. If the source is sparse, produce a small but correct graph.`;
 
+// Extraction-only guidance (full graph output). Kept out of CORE_GUIDELINES
+// because live mode emits ops, which carry neither quotes nor open points.
+const REVIEW_GUIDELINES = `Evidence and open points:
+- For every node the material describes in text, set "source" to a short verbatim quote (at most ~25 words) from the material that supports it. Copy the words exactly — do not paraphrase or merge sentences. Omit "source" when the material has no text for that step (for example, an image of a diagram, or a start/end marker you inferred).
+- Record "openPoints": what an auditor would need to confirm with the process owner before relying on this map.
+  - "gap": something the process clearly needs but the material doesn't cover — an outcome with no next step, a hand-off with no owner, a decision with only one branch described, or a control missing its frequency, owner, evidence, or the risk it addresses.
+  - "ambiguity": the material can be read more than one way — unclear who performs a step, unclear order, an undefined condition or threshold.
+  - "assumption": anything you inferred rather than read — an actor you assigned, a branch you completed, a step order you guessed.
+  - Each point has a one-sentence "issue", a specific "question" phrased to put to the process owner, and the "nodeId" of the step it concerns (null if it concerns the whole process).
+  - Do not fill gaps by inventing steps; record them as open points instead. Do not raise points the material already answers. List the most important first; usually 0–8 points, and an empty list is fine for a complete, unambiguous source.`;
+
 export const SYSTEM_PROMPT = `${EXTRACT_PREAMBLE}
 
-${CORE_GUIDELINES}`;
+${CORE_GUIDELINES}
 
-export const REFINE_ADDENDUM = `\n\nYou are updating an EXISTING process graph from either new walkthrough information or an explicit editing instruction. Apply requested additions, removals, corrections, renames, actor changes, branch changes, and control updates. Do not discard unrelated existing content. PRESERVE existing node, edge, and actor ids wherever the concept is unchanged so the canvas stays stable. Return the full updated graph.`;
+${REVIEW_GUIDELINES}`;
+
+export const REFINE_ADDENDUM = `\n\nYou are updating an EXISTING process graph from either new walkthrough information or an explicit editing instruction. Apply requested additions, removals, corrections, renames, actor changes, branch changes, and control updates. Do not discard unrelated existing content. PRESERVE existing node, edge, and actor ids wherever the concept is unchanged so the canvas stays stable. Keep existing "source" quotes for unchanged steps. Update "openPoints": remove points the new information answers, keep the rest (with their ids), and add new ones it raises. Return the full updated graph.`;
 
 const LIVE_PREAMBLE = `You are an audit process-mapping assistant in a LIVE walkthrough session. The user is speaking; their speech arrives as transcript chunks. You maintain a process-flow diagram that is already on screen, and you update it INCREMENTALLY by emitting graph operations (ops) — never a whole graph.
 

@@ -3,6 +3,7 @@
 import type { ProcessGraph, ProcessNode } from "../types";
 import { flowOrder } from "./flowOrder";
 import { assignControlIds } from "./controlIds";
+import { KIND_LABEL, orderedOpenPoints } from "./openPoints";
 
 export interface RcmRow {
   controlId: string;
@@ -161,6 +162,37 @@ export async function exportRcmXlsx(graph: ProcessGraph) {
     ...steps.map((r) => stepColumns.map((c) => ({ value: c.get(r), ...CELL_STYLE }))),
   ];
 
+  const label = new Map(graph.nodes.map((n) => [n.id, n.label]));
+  const pointColumns = [
+    { header: "Type", width: 13 },
+    { header: "Step", width: 30 },
+    { header: "Issue", width: 50 },
+    { header: "Question for the process owner", width: 50 },
+    { header: "Response", width: 40 },
+  ];
+  const points = orderedOpenPoints(graph);
+  const pointSheets = graph.openPoints
+    ? [
+        {
+          data: [
+            pointColumns.map((c) => ({ value: c.header, ...HEADER_STYLE })),
+            ...points.map((p) =>
+              [
+                KIND_LABEL[p.kind],
+                (p.nodeId && label.get(p.nodeId)) || "Whole process",
+                p.issue,
+                p.question,
+                "",
+              ].map((value) => ({ value, ...CELL_STYLE })),
+            ),
+          ],
+          sheet: "Open points",
+          columns: pointColumns.map((c) => ({ width: c.width })),
+          stickyRowsCount: 1,
+        },
+      ]
+    : [];
+
   const blob = await writeXlsxFile(
     [
       {
@@ -176,6 +208,7 @@ export async function exportRcmXlsx(graph: ProcessGraph) {
         columns: stepColumns.map((c) => ({ width: c.width })),
         stickyRowsCount: 1,
       },
+      ...pointSheets,
     ],
     { fontFamily: "Calibri", fontSize: 11 },
   ).toBlob();

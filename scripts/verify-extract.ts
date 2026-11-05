@@ -29,6 +29,7 @@ async function main() {
   const graph = await extractGraph([{ kind: "text", text: transcript }], model);
 
   const { ok, errors } = validateProcessGraph(graph);
+  const flatTranscript = transcript.replace(/\s+/g, " ");
   const checks: Array<[string, boolean]> = [
     ["graph validates structurally", ok],
     ["has a title", Boolean(graph.title)],
@@ -39,14 +40,28 @@ async function main() {
       "has at least one decision node",
       graph.nodes.some((n) => n.type === "decision"),
     ],
+    ["returns an openPoints list", Array.isArray(graph.openPoints)],
+    [
+      "source quotes are verbatim (where given)",
+      graph.nodes.every((n) => !n.source || flatTranscript.includes(n.source.replace(/\s+/g, " ").trim())),
+    ],
+    [
+      "most steps carry a source quote",
+      graph.nodes.filter((n) => n.source).length >= Math.ceil(graph.nodes.length / 2),
+    ],
   ];
 
   console.log(`\nTitle: ${graph.title}`);
   console.log(
     `Actors: ${graph.actors.map((a) => a.name).join(", ")}\n` +
       `Nodes: ${graph.nodes.length}  Edges: ${graph.edges.length}  ` +
-      `Controls: ${graph.nodes.filter((n) => n.type === "control").length}\n`,
+      `Controls: ${graph.nodes.filter((n) => n.type === "control").length}  ` +
+      `Quoted steps: ${graph.nodes.filter((n) => n.source).length}  ` +
+      `Open points: ${graph.openPoints?.length ?? 0}\n`,
   );
+  for (const p of graph.openPoints ?? []) {
+    console.log(`  [${p.kind}] ${p.issue}\n      Ask: ${p.question}`);
+  }
 
   let failed = false;
   for (const [name, pass] of checks) {

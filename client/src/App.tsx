@@ -27,6 +27,7 @@ import { exportJson, exportPng } from "./lib/exportImage";
 import { assignControlIds } from "./lib/controlIds";
 import { parseImportedDiagram } from "./lib/importJson";
 import ExportMenu from "./components/ExportMenu";
+import OpenPointsPanel from "./components/OpenPointsPanel";
 import {
   createTranscriber,
   isLiveSupported,
@@ -89,6 +90,7 @@ export default function App() {
   /** Bumped when a different map appears or the view changes: re-frames the canvas. */
   const [fitKey, setFitKey] = useState(0);
   const reframe = useCallback(() => setFitKey((k) => k + 1), []);
+  const [focusRequest, setFocusRequest] = useState<{ nodeId: string; seq: number } | null>(null);
 
   // ----- live mode -----
   const liveSupported = isLiveSupported();
@@ -795,6 +797,7 @@ export default function App() {
               graph={graph}
               viewMode={viewMode}
               fitKey={fitKey}
+              focusRequest={focusRequest}
               selectedNodeId={selectedId}
               onSelectNode={setSelectedId}
               onSelectEdge={setSelectedEdgeId}
@@ -940,6 +943,16 @@ export default function App() {
                 )}
               </section>
             )}
+            <OpenPointsPanel
+              graph={graph}
+              selectedNodeId={selectedId}
+              onShowStep={(nodeId) => {
+                setSelectedId(nodeId);
+                setSelectedEdgeId(null);
+                setFocusRequest((r) => ({ nodeId, seq: (r?.seq ?? 0) + 1 }));
+              }}
+              onResolve={(pointId) => update(edit.resolveOpenPoint(graph, pointId))}
+            />
             <ActorPanel
               graph={graph}
               onRename={(actorId, name) =>
