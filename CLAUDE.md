@@ -145,7 +145,7 @@ small **graph operations** (`shared/graphOps.ts`: `GraphOp`, `LIVE_OPS_SCHEMA`,
   as `diffGraphs` in `shared/graphOps.ts`** (which produces model notices for live mode).
 - `lib/graphQuality.ts` — `assessGraph`: heuristic quality score + warnings (start/end nodes,
   disconnected nodes, controls, decisions) surfaced in the UI.
-- **Audit outputs** (header **Export ▾** menu, `components/ExportMenu.tsx`), all generated from the graph with no
+- **Audit outputs** (the **Export** step, `components/ExportPanel.tsx`), all generated from the graph with no
   model call:
   - `lib/flowOrder.ts` — `flowOrder(graph)`: steps in reading order (longest path from start, back-edges ignored,
     end last). Control numbering, the RCM, and the narrative all use it so they agree.
@@ -156,13 +156,27 @@ small **graph operations** (`shared/graphOps.ts`: `GraphOp`, `LIVE_OPS_SCHEMA`,
   - `lib/rcm.ts` — Risk & Control Matrix rows + numbered step list; Excel (`write-excel-file`, lazy-loaded) and CSV.
   - `lib/narrative.ts` — written narrative (numbered steps, decisions with branches, key controls) → Word (`docx`,
     lazy-loaded).
-  - `lib/importJson.ts` — header **Import** accepts the JSON export (bare graph) or `{ graph, viewMode }`.
+  - `lib/importJson.ts` — **Maps → Import** accepts the JSON export (bare graph) or `{ graph, viewMode }`.
   - `lib/exportImage.ts` — PNG renders the full map at 100% regardless of camera.
 - `components/OpenPointsPanel.tsx` + `lib/openPoints.ts` — the open points log (ordered by process, "Copy
   questions" as a numbered list for the process owner, "Mark resolved" = undoable removal, step links pan the
   canvas via Canvas's `focusRequest`). Steps with open points get a "?" flag; the inspector shows the source quote.
   Open points also go into the Word narrative and a third "Open points" sheet (with a blank Response column) in the
   RCM workbook.
+- **Shell / navigation (UI redesign).** The top bar holds the logo, the **Maps** menu (`FileMenu.tsx`: saved maps,
+  New, Import, Delete), the editable title, the **workflow stepper** (`Stepper.tsx`: Capture → Map → Review →
+  Export) and undo/redo/save. The stepper picks what the single left panel shows: Capture = `InputPanel` +
+  `RefinePanel` + model picker; Map = `ActorPanel` + add-step chips + tips; Review = `ReviewPanel` (map checks +
+  `OpenPointsPanel`); Export = `ExportPanel` (save + downloads; replaced the old header Export menu). After an
+  extraction the app jumps to Review. `Inspector.tsx` slides in on the right only while a step/connection is
+  selected (Esc closes it); its "Add the next step" chips reach Canvas via the `addAfterRequest` prop. The
+  flowchart/swimlane switch and "Whole map" live on the canvas. `EmptyState.tsx` offers the three ways in plus
+  **"Open the sample purchase-to-pay map"**, which loads `scripts/fixtures/p2p-sample-graph.json` locally (no AI
+  call, works without a key). `Icon.tsx` is the small stroke icon set.
+- **Theme** (`styles.css`): IBM Plex Sans (`@fontsource/ibm-plex-sans`), cool paper/white surfaces, one accent
+  (ledger blue `--accent`), and semantic map colours only (ochre control, plum decision, green/red start/end,
+  orange open points). Labels are sentence case. Node CSS widths must match `sizeFor()` in `layout.ts`. In
+  swimlane view cards don't repeat the actor name (the lane shows it).
 - `App.tsx` — orchestrates state, extraction, view toggle, editing, save/load, import/export.
 
 ## Conventions / gotchas

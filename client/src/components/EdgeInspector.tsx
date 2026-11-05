@@ -8,23 +8,17 @@ interface EdgeInspectorProps {
 }
 
 function nodeOptionLabel(node: ProcessNode): string {
-  return `${node.label} · ${node.type}`;
+  return node.label;
 }
 
 export default function EdgeInspector({
   graph,
   edge,
   onPatch,
-  onDelete,
+  onDelete: _onDelete,
 }: EdgeInspectorProps) {
   return (
     <div className="pf-inspector">
-      <div className="pf-inspector-head">
-        <h3>Edit connection</h3>
-        <button className="pf-link-danger" onClick={onDelete}>
-          Delete
-        </button>
-      </div>
 
       <label>From</label>
       <select
@@ -50,20 +44,15 @@ export default function EdgeInspector({
         ))}
       </select>
 
-      <p className="pf-hint">
-        Re-point either end to reroute this connection — no need to delete and
-        redraw.
-      </p>
+      <p className="pf-hint">Change either end to reroute the connection.</p>
 
-      <label>Outcome / condition</label>
+      <label>Condition</label>
       <input
         value={edge.label ?? ""}
         placeholder="e.g. approved, rejected, yes, no"
         onChange={(event) => onPatch({ label: event.target.value || undefined })}
       />
-      <p className="pf-hint">
-        Label outgoing decision branches so the path remains clear.
-      </p>
+      <p className="pf-hint">Label each branch leaving a decision so the path is clear.</p>
     </div>
   );
 }

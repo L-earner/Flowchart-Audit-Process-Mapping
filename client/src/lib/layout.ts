@@ -53,6 +53,7 @@ function sizeFor(type: ProcessNode["type"]): NodeSize {
 }
 
 const FLOW_NODE_GAP = 30;
+const EDGE_COLOR = "#8E98A6";
 const LANE_NODE_GAP = 36;
 const LANE_VERTICAL_PADDING = 22;
 
@@ -239,15 +240,16 @@ function buildEdges(
     reconnectable: true,
     interactionWidth: 28,
     ...handles,
-    style: { strokeWidth: 1.8, stroke: "#8b93a5" },
-    labelStyle: { fontSize: 11, fontWeight: 550, fill: "#525a6a" },
-    labelBgPadding: [7, 4] as [number, number],
-    labelBgStyle: { fill: "#fff", fillOpacity: 0.95 },
+    style: { strokeWidth: 1.5, stroke: EDGE_COLOR },
+    labelStyle: { fontSize: 11.5, fontWeight: 500, fill: "#3E4856" },
+    labelBgPadding: [7, 3] as [number, number],
+    labelBgBorderRadius: 4,
+    labelBgStyle: { fill: "#FFFFFF", stroke: "#D5DAE1", strokeWidth: 1 },
     markerEnd: {
       type: MarkerType.ArrowClosed,
-      width: 22,
-      height: 22,
-      color: "#8b93a5",
+      width: 16,
+      height: 16,
+      color: EDGE_COLOR,
     },
     };
   });
@@ -399,7 +401,8 @@ function layoutSwimlane(graph: ProcessGraph): LayoutResult {
       },
       data: {
         node: n,
-        actorName: n.actorId ? actorName.get(n.actorId) : undefined,
+        // The lane already names the actor; don't repeat it on every card.
+        actorName: undefined,
         openPoints: openCount.get(n.id) ?? 0,
       },
     };

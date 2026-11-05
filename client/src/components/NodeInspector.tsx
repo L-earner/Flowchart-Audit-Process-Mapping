@@ -2,6 +2,15 @@ import { useEffect, useState } from "react";
 import type { ProcessGraph, ProcessNode, NodeType, ControlType } from "../types";
 import { NODE_TYPES } from "../types";
 
+const TYPE_LABEL: Record<NodeType, string> = {
+  start: "Start",
+  end: "End",
+  process: "Step",
+  decision: "Decision",
+  control: "Control",
+  system: "Automated step",
+};
+
 const CONTROL_TYPES: ControlType[] = [
   "preventive",
   "detective",
@@ -22,19 +31,12 @@ export default function NodeInspector({
   node,
   onPatch,
   onPatchControl,
-  onDelete,
+  onDelete: _onDelete,
 }: NodeInspectorProps) {
   const nodePoints = (graph.openPoints ?? []).filter((p) => p.nodeId === node.id);
   return (
     <div className="pf-inspector">
-      <div className="pf-inspector-head">
-        <h3>Edit step</h3>
-        <button className="pf-link-danger" onClick={onDelete}>
-          Delete
-        </button>
-      </div>
-
-      <label>Label</label>
+      <label>Name</label>
       <input
         value={node.label}
         onChange={(e) => onPatch({ label: e.target.value })}
@@ -47,17 +49,17 @@ export default function NodeInspector({
       >
         {NODE_TYPES.map((t) => (
           <option key={t} value={t}>
-            {t}
+            {TYPE_LABEL[t]}
           </option>
         ))}
       </select>
 
-      <label>Actor / lane</label>
+      <label>Lane</label>
       <select
         value={node.actorId ?? ""}
         onChange={(e) => onPatch({ actorId: e.target.value || null })}
       >
-        <option value="">(none — start/end)</option>
+        <option value="">None (start and end only)</option>
         {graph.actors.map((a) => (
           <option key={a.id} value={a.id}>
             {a.name}
@@ -92,7 +94,7 @@ export default function NodeInspector({
 
       {node.type === "control" && (
         <div className="pf-control-edit">
-          <h4>🛡 Control details</h4>
+          <h4>Control details</h4>
           <label>Control ID</label>
           <ControlIdInput
             key={node.id}
