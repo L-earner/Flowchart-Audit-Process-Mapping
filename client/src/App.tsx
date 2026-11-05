@@ -4,9 +4,9 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
 } from "react";
 import type {
+  NodeType,
   ProcessEdge,
   ProcessGraph,
   ProcessNode,
@@ -26,37 +26,37 @@ import { applyOps, summarizeOps } from "@shared/graphOps.ts";
 import { exportJson, exportPng } from "./lib/exportImage";
 import { assignControlIds } from "./lib/controlIds";
 import { parseImportedDiagram } from "./lib/importJson";
-import ExportMenu from "./components/ExportMenu";
-import OpenPointsPanel from "./components/OpenPointsPanel";
+import Stepper, { type StepId, type StepState } from "./components/Stepper";
+import FileMenu from "./components/FileMenu";
+import ReviewPanel from "./components/ReviewPanel";
+import ExportPanel from "./components/ExportPanel";
+import Inspector from "./components/Inspector";
+import EmptyState from "./components/EmptyState";
+import Icon from "./components/Icon";
+import sampleMap from "../../scripts/fixtures/p2p-sample-graph.json";
 import {
   createTranscriber,
   isLiveSupported,
   type LiveTranscriber,
 } from "./lib/liveTranscribe";
 import Canvas from "./components/Canvas";
-import InputPanel from "./components/InputPanel";
-import NodeInspector from "./components/NodeInspector";
-import EdgeInspector from "./components/EdgeInspector";
+import InputPanel, { type InputTab } from "./components/InputPanel";
 import RefinePanel from "./components/RefinePanel";
 import ActorPanel from "./components/ActorPanel";
 import { assessGraph } from "./lib/graphQuality";
 import { summarizeChange } from "./lib/graphDiff";
-import { SAMPLE_WALKTHROUGH } from "./lib/sample";
 import "./styles.css";
 
 function Logo() {
+  // A start node, a step and a decision on one flow line: the product in miniature.
   return (
-    <svg className="pf-logo" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
-      <rect width="24" height="24" rx="6" fill="#4f46e5" />
-      <rect x="5" y="5" width="5.5" height="5.5" rx="1.5" fill="#fff" />
-      <rect x="13.5" y="13.5" width="5.5" height="5.5" rx="2.75" fill="#fff" />
-      <path
-        d="M10.5 7.75h3.75a2 2 0 0 1 2 2v3.75"
-        fill="none"
-        stroke="#fff"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-      />
+    <svg className="pf-logo" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
+      <rect width="28" height="28" rx="7" fill="#2B5F86" />
+      <circle cx="7" cy="14" r="2.6" fill="#fff" />
+      <path d="M9.6 14h2.6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
+      <rect x="12.4" y="10.6" width="5.6" height="6.8" rx="1.4" fill="#fff" />
+      <path d="M18 14h1.6" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" />
+      <rect x="20.2" y="11.6" width="4.8" height="4.8" rx="0.8" transform="rotate(45 22.6 14)" fill="none" stroke="#fff" strokeWidth="1.6" />
     </svg>
   );
 }
@@ -91,6 +91,10 @@ export default function App() {
   const [fitKey, setFitKey] = useState(0);
   const reframe = useCallback(() => setFitKey((k) => k + 1), []);
   const [focusRequest, setFocusRequest] = useState<{ nodeId: string; seq: number } | null>(null);
+  const [addAfterRequest, setAddAfterRequest] = useState<{ type: NodeType; seq: number } | null>(null);
+  /** Which workflow step's panel is showing. */
+  const [step, setStep] = useState<StepId>("capture");
+  const [inputTab, setInputTab] = useState<InputTab>("paste");
 
   // ----- live mode -----
   const liveSupported = isLiveSupported();
@@ -253,6 +257,19 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [busy, handleUndo, handleRedo, undoStack.length, redoStack.length]);
 
+  // Escape closes the inspector (unless you're typing in a field).
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const el = event.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT")) return;
+      setSelectedId(null);
+      setSelectedEdgeId(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   async function handleExtract(opts: { text?: string; files?: File[] }) {
     setBusy(true);
     setError(null);
@@ -267,6 +284,8 @@ export default function App() {
       setSelectedId(null);
       setSelectedEdgeId(null);
       reframe();
+      // Next thing to do with a fresh map: check it.
+      setStep("review");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -493,6 +512,7 @@ export default function App() {
       setSelectedId(null);
       setSelectedEdgeId(null);
       reframe();
+      setStep((current) => (current === "capture" ? "review" : current));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -517,9 +537,27 @@ export default function App() {
       setSelectedId(null);
       setSelectedEdgeId(null);
       reframe();
+      setStep("review");
     } catch (e) {
       setError((e as Error).message);
     }
+  }
+
+  /** Open the bundled sample map locally: no AI call, works without a key. */
+  function handleOpenSample() {
+    if (dirty && !window.confirm("Discard unsaved changes and open the sample map?")) return;
+    const sample = sampleMap as unknown as { graph: ProcessGraph; viewMode: ViewMode };
+    setGraph(assignControlIds(structuredClone(sample.graph)));
+    setViewMode(sample.viewMode);
+    setUndoStack([]);
+    setRedoStack([]);
+    setRefineNote(null);
+    setDiagramId(null);
+    setDirty(true);
+    setSelectedId(null);
+    setSelectedEdgeId(null);
+    reframe();
+    setStep("review");
   }
 
   function handleNew() {
@@ -534,6 +572,7 @@ export default function App() {
     setSelectedId(null);
     setSelectedEdgeId(null);
     setDirty(false);
+    setStep("capture");
   }
 
   async function handleDeleteDiagram(id: string) {
@@ -572,475 +611,455 @@ export default function App() {
     null;
   const quality = useMemo(() => (graph ? assessGraph(graph) : null), [graph]);
 
+  const keyName = provider === "openrouter" ? "OPENROUTER_API_KEY" : "GEMINI_API_KEY";
+  const blockedReason = keyMissing
+    ? `The server has no ${keyName}, so the AI can't run yet. Add it as a secret and restart the server.`
+    : undefined;
+  const openPointCount = graph?.openPoints?.length ?? 0;
+  const reviewAttention = Boolean(graph && (openPointCount > 0 || (quality?.warnings.length ?? 0) > 0));
+
+  const steps: StepState[] = [
+    {
+      id: "capture",
+      label: "Capture",
+      status: graph ? "Source mapped" : "Add material",
+      done: Boolean(graph),
+    },
+    {
+      id: "map",
+      label: "Map",
+      status: graph ? `${graph.nodes.length} steps, ${graph.actors.length} lanes` : undefined,
+      done: Boolean(graph),
+      disabled: !graph,
+    },
+    {
+      id: "review",
+      label: "Review",
+      status: graph
+        ? openPointCount > 0
+          ? `${openPointCount} to confirm`
+          : (quality?.warnings.length ?? 0) > 0
+            ? `${quality!.warnings.length} to fix`
+            : "Checks pass"
+        : undefined,
+      done: Boolean(graph) && !reviewAttention,
+      attention: reviewAttention,
+      disabled: !graph,
+    },
+    {
+      id: "export",
+      label: "Export",
+      status: graph ? (dirty ? "Not saved" : diagramId ? "Saved" : undefined) : undefined,
+      done: Boolean(graph && diagramId && !dirty),
+      disabled: !graph,
+    },
+  ];
+  const activeStep: StepId = graph ? step : "capture";
+  const nextStep: Record<StepId, { id: StepId; label: string } | null> = {
+    capture: graph ? { id: "map", label: "Next: arrange the map" } : null,
+    map: { id: "review", label: "Next: review the map" },
+    review: { id: "export", label: "Next: save and export" },
+    export: null,
+  };
+  const next = graph ? nextStep[activeStep] : null;
+
+  const showStep = (nodeId: string) => {
+    setSelectedId(nodeId);
+    setSelectedEdgeId(null);
+    setFocusRequest((r) => ({ nodeId, seq: (r?.seq ?? 0) + 1 }));
+  };
+
   return (
     <div className="pf-app">
-      <header className="pf-header">
-        <div className="pf-brand">
+      <header className="pf-topbar">
+        <div className="pf-topbar-left">
           <Logo />
-          <span className="pf-wordmark">Process-Flow Mapper</span>
-          <span className="pf-brand-chip">Audit</span>
+          {!graph && <span className="pf-wordmark">Process Mapper</span>}
           {demoMode && (
-            <span className="pf-brand-chip pf-demo-chip" title="Read-only example — edits aren't saved and reset on reload.">
+            <span className="pf-badge" title="Read-only example. Edits aren't saved and reset on reload.">
               Demo
             </span>
           )}
-        </div>
-        {graph && (
-          <input
-            className="pf-title-input"
-            value={graph.title}
-            onChange={(e) => update(edit.setTitle(graph, e.target.value))}
+          <span className="pf-topbar-divider" aria-hidden="true" />
+          <FileMenu
+            diagrams={diagrams}
+            currentId={diagramId}
+            hasGraph={Boolean(graph)}
+            demoMode={demoMode}
+            busy={busy}
+            onOpen={(id) => void handleLoad(id)}
+            onNew={handleNew}
+            onImport={(file) => void handleImportFile(file)}
+            onDelete={(id) => void handleDeleteDiagram(id)}
           />
-        )}
-        <div className="pf-header-actions">
+          {graph && (
+            <input
+              className="pf-title-input"
+              aria-label="Map title"
+              value={graph.title}
+              onChange={(e) => update(edit.setTitle(graph, e.target.value))}
+            />
+          )}
+        </div>
+
+        <Stepper steps={steps} active={activeStep} onSelect={setStep} />
+
+        <div className="pf-topbar-right">
           {graph && (
             <>
-              <div className="pf-toggle">
-                <button
-                  className={viewMode === "flowchart" ? "active" : ""}
-                  onClick={() => changeView("flowchart")}
-                >
-                  Flowchart
-                </button>
-                <button
-                  className={viewMode === "swimlane" ? "active" : ""}
-                  onClick={() => changeView("swimlane")}
-                >
-                  Swimlane
-                </button>
-              </div>
               <button
+                type="button"
+                className="pf-icon-button"
                 onClick={handleUndo}
                 disabled={busy || undoStack.length === 0}
-                title="Undo last change (Ctrl/Cmd+Z)"
+                title="Undo (Ctrl/Cmd+Z)"
+                aria-label="Undo"
               >
-                Undo
+                <Icon name="undo" />
               </button>
               <button
+                type="button"
+                className="pf-icon-button"
                 onClick={handleRedo}
                 disabled={busy || redoStack.length === 0}
                 title="Redo (Ctrl/Cmd+Shift+Z)"
+                aria-label="Redo"
               >
-                Redo
+                <Icon name="redo" />
               </button>
               {!demoMode && (
                 <button
-                  className={dirty ? "accent" : ""}
+                  type="button"
+                  className={`pf-save ${dirty || !diagramId ? "unsaved" : ""}`}
                   onClick={handleSave}
-                  disabled={busy}
+                  disabled={busy || (!dirty && Boolean(diagramId))}
+                  title={dirty || !diagramId ? "Save to your maps" : "All changes saved"}
                 >
-                  {diagramId ? (dirty ? "Save" : "Saved") : "Save"}
+                  {dirty || !diagramId ? (
+                    <>
+                      <span className="pf-save-dot" aria-hidden="true" /> Save
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="check" size={14} /> Saved
+                    </>
+                  )}
                 </button>
               )}
-              <ExportMenu
-                graph={graph}
-                viewMode={viewMode}
-                onError={setError}
-                onExportPng={() => exportPng(graph, viewMode)}
-                onExportJson={() => exportJson(graph)}
-              />
             </>
           )}
-          <label className="pf-import-button" title="Open a process map exported as JSON">
-            Import
-            <input
-              type="file"
-              accept="application/json,.json"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                e.target.value = "";
-                if (file) void handleImportFile(file);
-              }}
-            />
-          </label>
-          {graph && !demoMode && <button onClick={handleNew}>New</button>}
         </div>
       </header>
 
-      <div className="pf-toasts">
+      <div className="pf-toasts" aria-live="polite">
         {error && (
           <div className="pf-toast danger" role="alert">
+            <Icon name="alert" />
             <div>{error}</div>
-            <button
-              className="pf-toast-close"
-              aria-label="Dismiss"
-              onClick={() => setError(null)}
-            >
-              ×
+            <button className="pf-icon-button" aria-label="Dismiss" onClick={() => setError(null)}>
+              <Icon name="close" size={14} />
             </button>
           </div>
         )}
         {refineNote && (
           <div className="pf-toast" role="status">
+            <Icon name="check" />
             <div>{refineNote}</div>
-            <button
-              className="pf-toast-close"
-              aria-label="Dismiss"
-              onClick={() => setRefineNote(null)}
-            >
-              ×
+            <button className="pf-icon-button" aria-label="Dismiss" onClick={() => setRefineNote(null)}>
+              <Icon name="close" size={14} />
             </button>
           </div>
         )}
       </div>
 
-      <div className="pf-body">
-        <aside className="pf-sidebar">
-          {demoMode ? (
-            <p className="pf-hint pf-demo-note">
-              This is a read-only public demo. You can explore and edit the
-              diagram on the canvas, but changes aren't saved — reload the
-              page to reset to the example below.
-            </p>
-          ) : (
-            <>
-              <div className="pf-model">
-                <label htmlFor="pf-model-select">Model</label>
-                <select
-                  id="pf-model-select"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                >
-                  <optgroup label="Google Gemini">
-                    {MODELS.filter((m) => m.provider === "gemini").map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="OpenRouter">
-                    {MODELS.filter((m) => m.provider === "openrouter").map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
-                {keyMissing ? (
-                  <p className="pf-key-warn">
-                    ⚠ No {provider === "openrouter" ? "OPENROUTER_API_KEY" : "GEMINI_API_KEY"}{" "}
-                    set — add it as a secret to use this model.
+      <div className="pf-workspace">
+        <aside className="pf-panel" aria-label={`${steps.find((s) => s.id === activeStep)!.label} panel`}>
+          <div className="pf-panel-scroll">
+            {activeStep === "capture" && (
+              <>
+                <div className="pf-panel-intro">
+                  <h2>{graph ? "Add or replace material" : "Capture the walkthrough"}</h2>
+                  <p>
+                    {graph
+                      ? "Correct the current map with AI, or build a fresh map from new material."
+                      : "Choose how you'll give the assistant the process. It drafts a map you can then edit."}
+                  </p>
+                </div>
+                {demoMode ? (
+                  <p className="pf-hint pf-section">
+                    This public demo is read-only. Explore and edit the map on the canvas; changes aren't saved and
+                    reset when you reload.
                   </p>
                 ) : (
-                  <p className="pf-hint">
-                    {selectedModel?.note ??
-                      (provider === "openrouter"
-                        ? "Model via OpenRouter."
-                        : "Gemini with schema-constrained extraction.")}
-                  </p>
+                  <>
+                    {graph && (
+                      <RefinePanel
+                        busy={busy}
+                        blockedReason={blockedReason}
+                        voiceSupported={liveSupported}
+                        onRefine={handleRefine}
+                      />
+                    )}
+                    <section className="pf-section">
+                      {graph && <h3>Build a new map</h3>}
+                      <InputPanel
+                        tab={inputTab}
+                        onTabChange={setInputTab}
+                        busy={busy}
+                        supportsImages={Boolean(selectedModel?.vision)}
+                        supportsPdf={provider === "gemini"}
+                        blockedReason={blockedReason}
+                        onExtract={handleExtract}
+                        liveActive={liveActive}
+                        liveSupported={liveSupported}
+                        liveTranscript={liveTranscript}
+                        liveInterim={liveInterim}
+                        liveStatus={liveStatus}
+                        onToggleLive={() => void toggleLive()}
+                        onSubmitLive={submitLiveTranscript}
+                        hasGraph={Boolean(graph)}
+                      />
+                    </section>
+                    <section className="pf-section pf-model">
+                      <label className="pf-field-label" htmlFor="pf-model-select">
+                        AI model
+                      </label>
+                      <select id="pf-model-select" value={model} onChange={(e) => setModel(e.target.value)}>
+                        <optgroup label="Google Gemini">
+                          {MODELS.filter((m) => m.provider === "gemini").map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="OpenRouter">
+                          {MODELS.filter((m) => m.provider === "openrouter").map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </optgroup>
+                      </select>
+                      {!keyMissing && <p className="pf-hint">{selectedModel?.note ?? "Model via OpenRouter."}</p>}
+                    </section>
+                  </>
                 )}
-              </div>
-              <InputPanel
-                busy={busy}
-                supportsImages={Boolean(selectedModel?.vision)}
-                supportsPdf={provider === "gemini"}
-                blockedReason={
-                  keyMissing
-                    ? `Add ${provider === "openrouter" ? "OPENROUTER_API_KEY" : "GEMINI_API_KEY"} to use this model.`
-                    : undefined
-                }
-                onExtract={handleExtract}
-                liveActive={liveActive}
-                liveSupported={liveSupported}
-                liveTranscript={liveTranscript}
-                liveInterim={liveInterim}
-                liveStatus={liveStatus}
-                onToggleLive={() => void toggleLive()}
-                onSubmitLive={submitLiveTranscript}
-                hasGraph={Boolean(graph)}
-              />
-              {graph && (
-                <RefinePanel
-                  busy={busy}
-                  blockedReason={
-                    keyMissing
-                      ? `Add ${provider === "openrouter" ? "OPENROUTER_API_KEY" : "GEMINI_API_KEY"} to update this map.`
-                      : undefined
-                  }
-                  voiceSupported={liveSupported}
-                  onRefine={handleRefine}
+              </>
+            )}
+
+            {activeStep === "map" && graph && (
+              <>
+                <div className="pf-panel-intro">
+                  <h2>Arrange the map</h2>
+                  <p>Rename and reorder lanes here. Edit steps directly on the canvas: select one to change it.</p>
+                </div>
+                <ActorPanel
+                  graph={graph}
+                  onRename={(actorId, name) => update(edit.updateActor(graph, actorId, { name }))}
+                  onMove={(actorId, dir) => update(edit.clearPositions(edit.moveActor(graph, actorId, dir)))}
+                  onDelete={(actorId) => update(edit.clearPositions(edit.deleteActor(graph, actorId)))}
+                  onAdd={() => {
+                    const { graph: g } = edit.addActor(graph);
+                    update(edit.clearPositions(g));
+                  }}
                 />
-              )}
-            </>
-          )}
-          <div className="pf-saved">
-            <h4>{demoMode ? "Example diagrams" : "Saved diagrams"}</h4>
-            {diagrams.length === 0 && <p className="pf-muted">None yet.</p>}
-            <ul>
-              {diagrams.map((d) => (
-                <li key={d.id}>
-                  <button
-                    className={d.id === diagramId ? "active" : ""}
-                    onClick={() => handleLoad(d.id)}
-                    disabled={busy}
-                  >
-                    {d.title}
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {!demoMode && diagramId && (
-              <button
-                className="pf-delete-selected"
-                onClick={() => handleDeleteDiagram(diagramId)}
-                disabled={busy}
-              >
-                Delete selected diagram
-              </button>
+                <section className="pf-section">
+                  <h3>Add a step</h3>
+                  <p className="pf-hint">Adds to {selectedNode ? "the selected step's lane" : "the first lane"}. Connect it by dragging from one step's edge to another.</p>
+                  <div className="pf-chip-row">
+                    {(["process", "decision", "control", "system"] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        className="pf-chip"
+                        onClick={() => {
+                          const { graph: g, nodeId } = edit.addNode(
+                            graph,
+                            t,
+                            selectedNode?.actorId ?? graph.actors[0]?.id ?? null,
+                          );
+                          update(g);
+                          setSelectedId(nodeId);
+                          setSelectedEdgeId(null);
+                        }}
+                      >
+                        <span className={`pf-kind-dot ${t}`} aria-hidden="true" />
+                        {t === "process" ? "Step" : t === "system" ? "Automated step" : t[0].toUpperCase() + t.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+                <section className="pf-section">
+                  <h3>On the canvas</h3>
+                  <ul className="pf-tips">
+                    <li>Double-click a label to rename a step.</li>
+                    <li>In swimlanes, drag a step into another lane to change who does it.</li>
+                    <li>Select a step or connection and press Delete to remove it.</li>
+                  </ul>
+                </section>
+              </>
+            )}
+
+            {activeStep === "review" && graph && quality && (
+              <>
+                <div className="pf-panel-intro">
+                  <h2>Review the map</h2>
+                  <p>Check the structure, then confirm the open points with the process owner.</p>
+                </div>
+                <ReviewPanel
+                  graph={graph}
+                  quality={quality}
+                  selectedNodeId={selectedId}
+                  onShowStep={showStep}
+                  onResolve={(pointId) => update(edit.resolveOpenPoint(graph, pointId))}
+                />
+              </>
+            )}
+
+            {activeStep === "export" && graph && (
+              <>
+                <div className="pf-panel-intro">
+                  <h2>Save and export</h2>
+                  <p>Download the map as working-paper documents.</p>
+                </div>
+                <ExportPanel
+                  graph={graph}
+                  demoMode={demoMode}
+                  dirty={dirty}
+                  saved={Boolean(diagramId)}
+                  busy={busy}
+                  onSave={() => void handleSave()}
+                  onError={setError}
+                  onExportPng={() => exportPng(graph, viewMode)}
+                  onExportJson={() => exportJson(graph)}
+                />
+              </>
             )}
           </div>
+          {next && (
+            <footer className="pf-panel-footer">
+              <button type="button" className="pf-secondary pf-block" onClick={() => setStep(next.id)}>
+                {next.label}
+              </button>
+            </footer>
+          )}
         </aside>
 
-        <main className="pf-main">
+        <main className="pf-stage">
           {graph ? (
             <Canvas
               graph={graph}
               viewMode={viewMode}
               fitKey={fitKey}
               focusRequest={focusRequest}
+              onChangeView={changeView}
+              addAfterRequest={addAfterRequest}
               selectedNodeId={selectedId}
               onSelectNode={setSelectedId}
               onSelectEdge={setSelectedEdgeId}
               onNodePositions={(pos) => update(edit.applyPositions(graph, pos))}
               onConnect={(s, t) => update(edit.addEdge(graph, s, t))}
               onReconnectEdge={(edgeId, s, t) => {
-                if (
-                  graph.edges.some(
-                    (e) => e.id !== edgeId && e.source === s && e.target === t,
-                  )
-                ) {
+                if (graph.edges.some((e) => e.id !== edgeId && e.source === s && e.target === t)) {
                   return; // would duplicate an existing connection
                 }
                 update(edit.updateEdge(graph, edgeId, { source: s, target: t }));
               }}
-              onRenameNode={(nodeId, label) =>
-                update(edit.updateNode(graph, nodeId, { label }))
-              }
+              onRenameNode={(nodeId, label) => update(edit.updateNode(graph, nodeId, { label }))}
               onReassignActor={(nodeId, actorId) =>
-                update(
-                  edit.updateNode(graph, nodeId, { actorId, position: undefined }),
-                )
+                update(edit.updateNode(graph, nodeId, { actorId, position: undefined }))
               }
               onAddNode={(type, actorId, position, connectFrom) => {
-                const { graph: withNode, nodeId } = edit.addNode(
-                  graph,
-                  type,
-                  actorId,
-                  position,
-                );
-                const next = connectFrom
-                  ? edit.addEdge(withNode, connectFrom, nodeId)
-                  : withNode;
-                update(next);
+                const { graph: withNode, nodeId } = edit.addNode(graph, type, actorId, position);
+                const nextGraph = connectFrom ? edit.addEdge(withNode, connectFrom, nodeId) : withNode;
+                update(nextGraph);
                 setSelectedId(nodeId);
                 setSelectedEdgeId(null);
               }}
               onDeleteElements={(nodeIds, edgeIds) => {
                 if (nodeIds.length === 0 && edgeIds.length === 0) return;
-                let next = graph;
-                for (const id of nodeIds) next = edit.deleteNode(next, id);
-                for (const id of edgeIds) next = edit.deleteEdge(next, id);
-                update(next);
+                let nextGraph = graph;
+                for (const id of nodeIds) nextGraph = edit.deleteNode(nextGraph, id);
+                for (const id of edgeIds) nextGraph = edit.deleteEdge(nextGraph, id);
+                update(nextGraph);
                 setSelectedId(null);
                 setSelectedEdgeId(null);
               }}
             />
           ) : busy ? (
             <div className="pf-skeleton" role="status" aria-live="polite">
-              <div className="pf-skeleton-flow">
+              <div className="pf-skeleton-flow" aria-hidden="true">
                 <div className="pf-skeleton-node" />
                 <div className="pf-skeleton-link" />
                 <div className="pf-skeleton-node wide" />
                 <div className="pf-skeleton-link" />
                 <div className="pf-skeleton-node" />
               </div>
-              <div className="pf-skeleton-label">Mapping the process…</div>
-              <div className="pf-skeleton-sub">
-                The model is reading the walkthrough and drawing the flow.
-              </div>
+              <p className="pf-skeleton-label">Mapping the process</p>
+              <p className="pf-skeleton-sub">Reading the material, finding the lanes, steps and controls.</p>
             </div>
           ) : (
-            <div className="pf-empty">
-              <svg
-                className="pf-empty-art"
-                width="220"
-                height="120"
-                viewBox="0 0 220 120"
-                fill="none"
-                aria-hidden="true"
-              >
-                <rect x="38" y="8" width="76" height="34" rx="9" fill="#fff" stroke="#d5d9e2" strokeWidth="1.5" />
-                <rect x="38" y="8" width="3" height="34" rx="1.5" fill="#4f46e5" />
-                <path d="M76 42v13" stroke="#d5d9e2" strokeWidth="1.5" strokeDasharray="3 3" />
-                <rect x="61" y="56" width="30" height="30" rx="7" transform="rotate(45 76 71)" fill="#f5f3ff" stroke="#a78bfa" strokeWidth="1.5" />
-                <path d="M97 71h30" stroke="#d5d9e2" strokeWidth="1.5" strokeDasharray="3 3" />
-                <rect x="128" y="54" width="84" height="34" rx="9" fill="#fffdf5" stroke="#fde68a" strokeWidth="1.5" />
-                <rect x="128" y="54" width="3" height="34" rx="1.5" fill="#d97706" />
-                <path d="M137 65l4-2 4 2v4.5c0 2.6-1.7 4.4-4 5.5-2.3-1.1-4-2.9-4-5.5V65z" fill="#d97706" opacity="0.85" />
-              </svg>
-              {demoMode ? (
-                <>
-                  <h2>Explore an example process map</h2>
-                  <p>
-                    Pick an example from the sidebar to see the diagram. You
-                    can move nodes and try edits, but nothing here is saved.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <h2>Map a process from any walkthrough</h2>
-                  <p>
-                    Paste a transcript, upload a document or image, or start a live
-                    conversation — the flow appears here as an editable diagram with
-                    actors, decisions, and control points.
-                  </p>
-                  <button
-                    className="pf-empty-cta"
-                    type="button"
-                    disabled={busy || keyMissing}
-                    onClick={() => void handleExtract({ text: SAMPLE_WALKTHROUGH })}
-                  >
-                    Try a sample walkthrough
-                  </button>
-                  <div className="pf-empty-alt">or use the panel <span className="pf-only-wide">on the left</span><span className="pf-only-narrow">below</span> to start</div>
-                </>
-              )}
-            </div>
+            <EmptyState
+              demoMode={demoMode}
+              keyMissing={keyMissing}
+              onStart={(tab) => {
+                setInputTab(tab);
+                setStep("capture");
+                window.setTimeout(() => {
+                  document.querySelector<HTMLElement>(
+                    tab === "paste" ? "#pf-notes" : tab === "upload" ? ".pf-dropzone" : ".pf-tabpane .pf-block",
+                  )?.focus();
+                }, 50);
+              }}
+              onOpenSample={handleOpenSample}
+            />
           )}
           {busy && graph && <div className="pf-progress" aria-hidden="true" />}
         </main>
 
         {graph && (
-          <aside className="pf-rightbar">
-            {quality && (
-              <section className="pf-quality">
-                <div className="pf-quality-head">
-                  <h3>Map quality</h3>
-                  <div
-                    className="pf-quality-ring"
-                    style={{ "--score": quality.score } as CSSProperties}
-                    title={`${quality.score}% of mapping checks passed`}
-                  >
-                    <span>{quality.score}</span>
-                  </div>
-                </div>
-                <div className="pf-quality-grid">
-                  {quality.checks.map((check) => (
-                    <div className={`pf-quality-stat ${check.status}`} key={check.label}>
-                      <span>{check.value}</span>
-                      {check.label}
-                    </div>
-                  ))}
-                </div>
-                {quality.warnings.length > 0 ? (
-                  <ul className="pf-quality-warnings">
-                    {quality.warnings.map((warning) => (
-                      <li key={warning}>{warning}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="pf-quality-good">Core mapping checks passed.</p>
-                )}
-              </section>
-            )}
-            <OpenPointsPanel
-              graph={graph}
-              selectedNodeId={selectedId}
-              onShowStep={(nodeId) => {
-                setSelectedId(nodeId);
-                setSelectedEdgeId(null);
-                setFocusRequest((r) => ({ nodeId, seq: (r?.seq ?? 0) + 1 }));
-              }}
-              onResolve={(pointId) => update(edit.resolveOpenPoint(graph, pointId))}
-            />
-            <ActorPanel
-              graph={graph}
-              onRename={(actorId, name) =>
-                update(edit.updateActor(graph, actorId, { name }))
-              }
-              onMove={(actorId, dir) =>
-                update(edit.clearPositions(edit.moveActor(graph, actorId, dir)))
-              }
-              onDelete={(actorId) =>
-                update(edit.clearPositions(edit.deleteActor(graph, actorId)))
-              }
-              onAdd={() => {
-                const { graph: g } = edit.addActor(graph);
-                update(edit.clearPositions(g));
-              }}
-            />
-            <div className="pf-add">
-              <h4>Add step</h4>
-              <div className="pf-add-buttons">
-                {(["process", "decision", "control", "system"] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => {
-                      const { graph: g, nodeId } = edit.addNode(
-                        graph,
-                        t,
-                        selectedNode?.actorId ?? graph.actors[0]?.id ?? null,
-                      );
-                      update(g);
-                      setSelectedId(nodeId);
-                      setSelectedEdgeId(null);
-                    }}
-                  >
-                    + {t}
-                  </button>
-                ))}
-              </div>
-              <p className="pf-hint">
-                Drag from a node's handle to another to connect steps.
-              </p>
-            </div>
-            {selectedNode && (
-              <NodeInspector
-                graph={graph}
-                node={selectedNode}
-                onPatch={(patch) => update(edit.updateNode(graph, selectedNode.id, patch))}
-                onPatchControl={(patch) =>
-                  update(edit.updateControl(graph, selectedNode.id, patch))
+          <Inspector
+            graph={graph}
+            node={selectedNode}
+            edge={selectedEdge}
+            onClose={() => {
+              setSelectedId(null);
+              setSelectedEdgeId(null);
+            }}
+            onPatchNode={(patch) => selectedNode && update(edit.updateNode(graph, selectedNode.id, patch))}
+            onPatchControl={(patch) => selectedNode && update(edit.updateControl(graph, selectedNode.id, patch))}
+            onDeleteNode={() => {
+              if (!selectedNode) return;
+              update(edit.deleteNode(graph, selectedNode.id));
+              setSelectedId(null);
+            }}
+            onAddAfter={(type) => setAddAfterRequest((r) => ({ type, seq: (r?.seq ?? 0) + 1 }))}
+            onPatchEdge={(patch) => {
+              if (!selectedEdge) return;
+              const nextSource = patch.source ?? selectedEdge.source;
+              const nextTarget = patch.target ?? selectedEdge.target;
+              if (patch.source || patch.target) {
+                if (nextSource === nextTarget) {
+                  setError("A connection can't start and end on the same step.");
+                  return;
                 }
-                onDelete={() => {
-                  update(edit.deleteNode(graph, selectedNode.id));
-                  setSelectedId(null);
-                }}
-              />
-            )}
-            {selectedEdge && (
-              <EdgeInspector
-                graph={graph}
-                edge={selectedEdge}
-                onPatch={(patch) => {
-                  const nextSource = patch.source ?? selectedEdge.source;
-                  const nextTarget = patch.target ?? selectedEdge.target;
-                  if (patch.source || patch.target) {
-                    if (nextSource === nextTarget) {
-                      setError("A connection can't start and end on the same step.");
-                      return;
-                    }
-                    if (
-                      graph.edges.some(
-                        (e) =>
-                          e.id !== selectedEdge.id &&
-                          e.source === nextSource &&
-                          e.target === nextTarget,
-                      )
-                    ) {
-                      setError("That connection already exists.");
-                      return;
-                    }
-                  }
-                  update(edit.updateEdge(graph, selectedEdge.id, patch));
-                }}
-                onDelete={() => {
-                  update(edit.deleteEdge(graph, selectedEdge.id));
-                  setSelectedEdgeId(null);
-                }}
-              />
-            )}
-          </aside>
+                if (
+                  graph.edges.some(
+                    (e) => e.id !== selectedEdge.id && e.source === nextSource && e.target === nextTarget,
+                  )
+                ) {
+                  setError("That connection already exists.");
+                  return;
+                }
+              }
+              update(edit.updateEdge(graph, selectedEdge.id, patch));
+            }}
+            onDeleteEdge={() => {
+              if (!selectedEdge) return;
+              update(edit.deleteEdge(graph, selectedEdge.id));
+              setSelectedEdgeId(null);
+            }}
+          />
         )}
       </div>
     </div>

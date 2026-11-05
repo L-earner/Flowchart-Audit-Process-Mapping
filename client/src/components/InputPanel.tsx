@@ -1,9 +1,12 @@
 import { useRef, useState } from "react";
 import { SAMPLE_WALKTHROUGH } from "../lib/sample";
+import Icon from "./Icon";
 
 export type InputTab = "paste" | "upload" | "live";
 
 interface InputPanelProps {
+  tab: InputTab;
+  onTabChange: (tab: InputTab) => void;
   busy: boolean;
   blockedReason?: string;
   supportsImages: boolean;
@@ -20,7 +23,15 @@ interface InputPanelProps {
   hasGraph: boolean;
 }
 
+const TABS: Array<{ id: InputTab; label: string; icon: "text" | "upload" | "mic" }> = [
+  { id: "paste", label: "Notes", icon: "text" },
+  { id: "upload", label: "Document", icon: "upload" },
+  { id: "live", label: "Live", icon: "mic" },
+];
+
 export default function InputPanel({
+  tab,
+  onTabChange,
   busy,
   blockedReason,
   supportsImages,
@@ -35,7 +46,6 @@ export default function InputPanel({
   onSubmitLive,
   hasGraph,
 }: InputPanelProps) {
-  const [tab, setTab] = useState<InputTab>("paste");
   const [text, setText] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -44,84 +54,108 @@ export default function InputPanel({
     const isImage = file.type.startsWith("image/");
     return (isPdf && !supportsPdf) || (isImage && !supportsImages);
   });
+  const action = hasGraph ? "Replace map" : "Map the process";
 
   return (
     <div className="pf-input">
-      <div className="pf-tabs">
-        <button className={tab === "paste" ? "active" : ""} onClick={() => setTab("paste")}>
-          Paste
-        </button>
-        <button className={tab === "upload" ? "active" : ""} onClick={() => setTab("upload")}>
-          Upload
-        </button>
-        <button className={tab === "live" ? "active" : ""} onClick={() => setTab("live")}>
-          Live
-        </button>
+      <div className="pf-segmented" role="tablist" aria-label="Source">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            className={tab === t.id ? "active" : ""}
+            onClick={() => onTabChange(t.id)}
+          >
+            <Icon name={t.icon} size={14} />
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {tab === "paste" && (
         <div className="pf-tabpane">
-          <button
-            className="pf-sample"
-            type="button"
-            onClick={() => setText(SAMPLE_WALKTHROUGH)}
-            disabled={busy}
-          >
-            Use a sample walkthrough
-          </button>
+          <label className="pf-field-label" htmlFor="pf-notes">
+            Walkthrough notes or transcript
+          </label>
           <textarea
-            placeholder="Paste a walkthrough transcript or process notes here…"
+            id="pf-notes"
+            placeholder="Paste meeting notes, a transcript, or a procedure description."
             value={text}
             onChange={(e) => setText(e.target.value)}
-            rows={10}
+            rows={11}
           />
+          <div className="pf-row-between">
+            <button className="pf-link" type="button" onClick={() => setText(SAMPLE_WALKTHROUGH)} disabled={busy}>
+              Fill in sample notes
+            </button>
+            <span className="pf-meta">{text.trim() ? `${text.trim().split(/\s+/).length} words` : ""}</span>
+          </div>
           <button
-            className="pf-primary"
+            className="pf-primary pf-block"
             disabled={busy || Boolean(blockedReason) || !text.trim()}
             onClick={() => onExtract({ text })}
           >
-            {busy ? "Mapping…" : "Map the process"}
+            {busy ? "Mapping the process…" : action}
           </button>
         </div>
       )}
 
       {tab === "upload" && (
         <div className="pf-tabpane">
+          <button
+            type="button"
+            className="pf-dropzone"
+            onClick={() => fileRef.current?.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              setFiles(Array.from(e.dataTransfer.files ?? []));
+            }}
+          >
+            <Icon name="upload" size={20} />
+            <span>{files.length ? "Choose different files" : "Choose files or drop them here"}</span>
+            <small>
+              Word, text{supportsPdf ? ", PDF" : ""}
+              {supportsImages ? " and images" : ""}
+            </small>
+          </button>
           <input
             ref={fileRef}
             type="file"
             multiple
+            hidden
             accept=".pdf,.docx,.txt,.md,.csv,image/*"
             onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-          />
-          <p className="pf-hint">
-            Word and text files are supported.
-            {supportsPdf ? " PDFs are supported." : " PDFs require a Claude model."}
-            {supportsImages
-              ? " Images are supported."
-              : " Images require a vision-capable model."}
-          </p>
-          <textarea
-            placeholder="Optional extra context…"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={3}
           />
           {files.length > 0 && (
             <ul className="pf-filelist">
               {files.map((f) => (
-                <li key={f.name}>{f.name}</li>
+                <li key={f.name}>
+                  <Icon name="file" size={14} />
+                  {f.name}
+                </li>
               ))}
             </ul>
           )}
           {incompatibleFiles.length > 0 && (
-            <p className="pf-key-warn">
-              The selected model cannot read:{" "}
-              {incompatibleFiles.map((file) => file.name).join(", ")}.
+            <p className="pf-warn">
+              The selected AI model can't read {incompatibleFiles.map((file) => file.name).join(", ")}.
+              {!supportsPdf && " Choose a Gemini model for PDFs."}
             </p>
           )}
+          <label className="pf-field-label" htmlFor="pf-context">
+            Extra context (optional)
+          </label>
+          <textarea
+            id="pf-context"
+            placeholder="e.g. Focus on the approval steps."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={3}
+          />
           <button
-            className="pf-primary"
+            className="pf-primary pf-block"
             disabled={
               busy ||
               Boolean(blockedReason) ||
@@ -130,66 +164,60 @@ export default function InputPanel({
             }
             onClick={() => onExtract({ text: text.trim() || undefined, files })}
           >
-            {busy ? "Mapping…" : "Map the process"}
+            {busy ? "Mapping the process…" : action}
           </button>
         </div>
       )}
-
-      {blockedReason && <p className="pf-key-warn">{blockedReason}</p>}
 
       {tab === "live" && (
         <div className="pf-tabpane">
           {!liveSupported ? (
             <p className="pf-hint">
-              Live transcription uses the browser Speech Recognition API, which works in
-              Chrome / Edge. It isn't available in this browser.
+              Live mapping uses your browser's speech recognition, which works in Chrome and Edge. Open this page in
+              one of those to use it.
             </p>
           ) : (
             <>
               <p className="pf-hint">
-                Speak and the map builds in real time. You can also direct the
-                assistant: “remove that approval step”, “rename it to…”, “undo
-                that”.
+                Talk through the process and the map builds as you speak. You can also say things like "remove that
+                approval step", "rename it to…" or "undo that".
               </p>
               <button
-                className={liveActive ? "pf-danger" : "pf-primary"}
+                className={`pf-block ${liveActive ? "pf-danger" : "pf-primary"}`}
                 onClick={onToggleLive}
                 disabled={Boolean(blockedReason)}
               >
-                {liveActive ? "■ Stop listening" : "● Start listening"}
+                <span className={`pf-rec ${liveActive ? "on" : ""}`} aria-hidden="true" />
+                {liveActive ? "Stop listening" : "Start listening"}
               </button>
-              {liveStatus && <p className="pf-live-status">{liveStatus}</p>}
-              <div className="pf-transcript">
+              {liveStatus && <p className="pf-live-status" role="status">{liveStatus}</p>}
+              <div className="pf-transcript" aria-live="polite">
                 {liveTranscript || liveInterim ? (
                   <>
                     {liveTranscript}
-                    {liveInterim && (
-                      <span className="pf-muted"> {liveInterim}</span>
-                    )}
+                    {liveInterim && <span className="pf-muted"> {liveInterim}</span>}
                   </>
                 ) : (
-                  <span className="pf-muted">(transcript will appear here)</span>
+                  <span className="pf-muted">The transcript appears here as you speak.</span>
                 )}
               </div>
               {liveTranscript.trim() && (
                 <button
-                  className="pf-primary pf-live-submit"
+                  className="pf-secondary pf-block"
                   type="button"
                   onClick={onSubmitLive}
                   disabled={busy || liveActive || Boolean(blockedReason)}
-                  title="Replace the diagram with a fresh extraction from the whole transcript"
+                  title="Replace the map with a fresh one built from the whole transcript"
                 >
-                  {busy
-                    ? "Mapping..."
-                    : hasGraph
-                      ? "Re-map from full transcript"
-                      : "Map transcript"}
+                  {busy ? "Mapping the process…" : hasGraph ? "Rebuild map from full transcript" : "Map transcript"}
                 </button>
               )}
             </>
           )}
         </div>
       )}
+
+      {blockedReason && <p className="pf-warn">{blockedReason}</p>}
     </div>
   );
 }

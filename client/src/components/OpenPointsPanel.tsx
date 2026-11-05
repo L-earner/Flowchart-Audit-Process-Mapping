@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ProcessGraph } from "../types";
 import { KIND_LABEL, orderedOpenPoints, questionsForOwner } from "../lib/openPoints";
+import Icon from "./Icon";
 
 interface OpenPointsPanelProps {
   graph: ProcessGraph;
@@ -35,19 +36,23 @@ export default function OpenPointsPanel({
   }
 
   return (
-    <section className="pf-open-points">
-      <div className="pf-open-head">
-        <h4>
-          Open points <span className="pf-count">{points.length}</span>
-        </h4>
+    <section className="pf-section pf-open-points">
+      <div className="pf-section-head">
+        <h3>
+          Open points {points.length > 0 && <span className="pf-count">{points.length}</span>}
+        </h3>
         {points.length > 0 && (
-          <button type="button" className="pf-small-button" onClick={() => void copy()}>
+          <button type="button" className="pf-link" onClick={() => void copy()}>
+            <Icon name={copied === "ok" ? "check" : "copy"} size={14} />
             {copied === "ok" ? "Copied" : copied === "failed" ? "Copy failed" : "Copy questions"}
           </button>
         )}
       </div>
+      {points.length > 0 && (
+        <p className="pf-hint">Things to confirm with the process owner before relying on this map.</p>
+      )}
       {points.length === 0 ? (
-        <p className="pf-hint">Nothing to confirm — the source covered everything checked.</p>
+        <p className="pf-hint">Nothing to confirm. The source covered everything that was checked.</p>
       ) : (
         <ul>
           {points.map((p) => {

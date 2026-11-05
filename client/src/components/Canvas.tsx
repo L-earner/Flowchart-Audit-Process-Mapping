@@ -4,7 +4,6 @@ import {
   Background,
   BackgroundVariant,
   Controls,
-  MiniMap,
   Panel,
   useNodesState,
   useEdgesState,
@@ -31,6 +30,7 @@ import {
   type RFNode,
 } from "../lib/layout";
 import { readableViewport } from "../lib/viewport";
+import Icon from "./Icon";
 import { nodeTypes } from "./nodes";
 import { NodeEditContext } from "./nodes/nodeEditContext";
 
@@ -43,6 +43,9 @@ interface CanvasProps {
    * the view is toggled — not on ordinary edits, so the camera stays put.
    */
   fitKey: number;
+  onChangeView: (mode: ViewMode) => void;
+  /** Bump `seq` to add a step of `type` after the selected one (from the inspector). */
+  addAfterRequest?: { type: NodeType; seq: number } | null;
   /** Bump `seq` to pan/zoom the camera onto a step (e.g. from the Open points list). */
   focusRequest?: { nodeId: string; seq: number } | null;
   selectedNodeId: string | null;
@@ -68,6 +71,8 @@ export default function Canvas({
   viewMode,
   fitKey,
   focusRequest,
+  onChangeView,
+  addAfterRequest,
   selectedNodeId,
   onSelectNode,
   onSelectEdge,
@@ -183,6 +188,14 @@ export default function Canvas({
     );
   };
 
+  const addHandled = useRef<number | null>(null);
+  useEffect(() => {
+    if (!addAfterRequest || addHandled.current === addAfterRequest.seq) return;
+    addHandled.current = addAfterRequest.seq;
+    addAfterSelected(addAfterRequest.type);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [addAfterRequest]);
+
   const handleCanvasDoubleClick = (event: ReactMouseEvent<HTMLDivElement>) => {
     if (
       !(event.target instanceof HTMLElement) ||
@@ -256,51 +269,35 @@ export default function Canvas({
         <AutoFrame laid={laid} viewMode={viewMode} fitKey={fitKey} />
         <FocusNode laid={laid} request={focusRequest ?? null} />
         {viewMode === "swimlane" && <LaneRail lanes={laid.lanes} />}
-        <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} color="#d7dbe4" />
-        <Controls fitViewOptions={{ padding: 0.08, minZoom: 0.05, maxZoom: 1 }} />
-        <MiniMap
-          pannable
-          zoomable
-          maskColor="rgba(243, 244, 247, 0.75)"
-          nodeColor="#e0e3ea"
-          nodeStrokeColor="#c3c8d4"
-        />
+        <Background variant={BackgroundVariant.Lines} gap={24} lineWidth={1} color="#EDF0F3" />
+        <Controls showInteractive={false} fitViewOptions={{ padding: 0.08, minZoom: 0.05, maxZoom: 1 }} />
         <Panel position="top-left">
-          <div className="pf-canvas-help">
-            {selectedNode ? (
-              <>
-                <strong>Add after selected</strong>
-                <div className="pf-canvas-quick-actions">
-                  <button type="button" onClick={() => addAfterSelected("process")}>
-                    Step
-                  </button>
-                  <button type="button" onClick={() => addAfterSelected("decision")}>
-                    Decision
-                  </button>
-                  <button type="button" onClick={() => addAfterSelected("control")}>
-                    Control
-                  </button>
-                  <button type="button" onClick={() => addAfterSelected("system")}>
-                    System
-                  </button>
-                  <button
-                    type="button"
-                    className="danger"
-                    onClick={() => onDeleteElements([selectedNode.id], [])}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </>
-            ) : (
-              <span>Double-click empty space to add a step</span>
-            )}
+          <div className="pf-viewswitch" role="radiogroup" aria-label="Map view">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={viewMode === "flowchart"}
+              className={viewMode === "flowchart" ? "active" : ""}
+              onClick={() => onChangeView("flowchart")}
+            >
+              <Icon name="flowchart" size={14} /> Flowchart
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={viewMode === "swimlane"}
+              className={viewMode === "swimlane" ? "active" : ""}
+              onClick={() => onChangeView("swimlane")}
+            >
+              <Icon name="swimlane" size={14} /> Swimlanes
+            </button>
           </div>
         </Panel>
         <Panel position="top-right">
           <button
-            className="pf-fit-map"
+            className="pf-canvas-button"
             type="button"
+            title="Show the whole map"
             onClick={() =>
               flowRef.current?.fitView({
                 padding: 0.08,
@@ -310,9 +307,14 @@ export default function Canvas({
               })
             }
           >
-            Fit entire map
+            <Icon name="fit" size={14} /> Whole map
           </button>
         </Panel>
+        {!selectedNodeId && graph.nodes.length <= 4 && (
+          <Panel position="bottom-center">
+            <p className="pf-canvas-tip">Double-click empty space to add a step. Drag from a step's edge to connect it.</p>
+          </Panel>
+        )}
       </ReactFlow>
     </div>
     </NodeEditContext.Provider>

@@ -101,11 +101,27 @@ function EditableLabel({
 function OpenPointFlag({ count }: { count?: number }) {
   if (!count) return null;
   return (
-    <span className="pf-open-flag" title={`${count} open point${count === 1 ? "" : "s"} to confirm — see Open points`}>
+    <span
+      className="pf-open-flag"
+      title={`${count} open point${count === 1 ? "" : "s"} to confirm (see Review)`}
+    >
       ?{count > 1 ? <small>{count}</small> : null}
     </span>
   );
 }
+
+const ShieldIcon = () => (
+  <svg width="11" height="12" viewBox="0 0 10 11" fill="currentColor" aria-hidden="true">
+    <path d="M5 0 9.5 1.8v3.1c0 2.7-1.9 4.8-4.5 6.1C2.4 9.7.5 7.6.5 4.9V1.8L5 0z" />
+  </svg>
+);
+
+const GearIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+    <circle cx="8" cy="8" r="2.3" />
+    <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" strokeLinecap="round" />
+  </svg>
+);
 
 export function StepNode({ data, selected }: NodeProps) {
   const { node, actorName, openPoints } = data as ProcessNodeData;
@@ -114,7 +130,11 @@ export function StepNode({ data, selected }: NodeProps) {
     <div className={`pf-node pf-step ${isSystem ? "pf-system" : ""} ${selected ? "pf-selected" : ""}`}>
       <Handles />
       <OpenPointFlag count={openPoints} />
-      {isSystem && <span className="pf-node-kind">System</span>}
+      {isSystem && (
+        <span className="pf-node-kind">
+          <GearIcon /> Automated
+        </span>
+      )}
       <EditableLabel nodeId={node.id} label={node.label} />
       {actorName && <div className="pf-actor">{actorName}</div>}
     </div>
@@ -138,9 +158,8 @@ export function DecisionNode({ data, selected }: NodeProps) {
     <div className={`pf-decision-wrap ${selected ? "pf-selected" : ""}`}>
       <Handles />
       <OpenPointFlag count={openPoints} />
-      <div className="pf-decision">
-        <EditableLabel nodeId={node.id} label={node.label} />
-      </div>
+      <div className="pf-decision" aria-hidden="true" />
+      <EditableLabel nodeId={node.id} label={node.label} className="pf-label pf-decision-label" />
       {actorName && <div className="pf-actor pf-actor-below">{actorName}</div>}
     </div>
   );
@@ -154,10 +173,8 @@ export function ControlNode({ data, selected }: NodeProps) {
       <Handles />
       <OpenPointFlag count={openPoints} />
       <div className="pf-control-badge">
-        <svg width="10" height="11" viewBox="0 0 10 11" fill="currentColor" aria-hidden="true">
-          <path d="M5 0 9.5 1.8v3.1c0 2.7-1.9 4.8-4.5 6.1C2.4 9.7.5 7.6.5 4.9V1.8L5 0z" />
-        </svg>
-        Control
+        <ShieldIcon />
+        <span>Control</span>
         {ctrl?.controlId && <span className="pf-control-ref">{ctrl.controlId}</span>}
       </div>
       <EditableLabel nodeId={node.id} label={node.label} />
@@ -169,7 +186,7 @@ export function ControlNode({ data, selected }: NodeProps) {
       )}
       {ctrl?.riskAddressed && (
         <div className="pf-risk" title={ctrl.riskAddressed}>
-          <strong>Risk:</strong> {ctrl.riskAddressed}
+          {ctrl.riskAddressed}
         </div>
       )}
       {actorName && <div className="pf-actor">{actorName}</div>}

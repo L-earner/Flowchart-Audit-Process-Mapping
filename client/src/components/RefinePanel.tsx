@@ -3,6 +3,7 @@ import {
   createTranscriber,
   type LiveTranscriber,
 } from "../lib/liveTranscribe";
+import Icon from "./Icon";
 
 interface RefinePanelProps {
   busy: boolean;
@@ -58,43 +59,40 @@ export default function RefinePanel({
   }, []);
 
   return (
-    <section className="pf-refine">
-      <div className="pf-refine-head">
-        <div>
-          <h3>Update current map</h3>
-          <p>Describe what to add, remove, rename, or correct.</p>
-        </div>
-        <span>AI edit</span>
-      </div>
+    <section className="pf-section pf-refine">
+      <h3>Change the map with AI</h3>
+      <p className="pf-hint">Describe a correction or new information. You can undo the result.</p>
       <textarea
         rows={4}
         value={instruction}
-        placeholder='e.g. "Add a Finance Director approval after the manager review and mark it as a preventive control."'
+        aria-label="Describe the change"
+        placeholder='e.g. "Add a Finance Director approval after the manager review, as a preventive control."'
         onChange={(event) => setInstruction(event.target.value)}
         disabled={busy}
       />
       {interim && <p className="pf-refine-interim">{interim}</p>}
-      <div className="pf-refine-actions">
+      <div className="pf-button-row">
         {voiceSupported && (
           <button
-            className={listening ? "pf-voice active" : "pf-voice"}
+            className={listening ? "pf-secondary active" : "pf-secondary"}
             type="button"
             onClick={toggleListening}
             disabled={busy || Boolean(blockedReason)}
           >
-            {listening ? "Stop voice" : "Use voice"}
+            <Icon name="mic" size={14} />
+            {listening ? "Stop" : "Dictate"}
           </button>
         )}
         <button
-          className="pf-primary"
+          className="pf-primary pf-grow"
           type="button"
           onClick={applyUpdate}
           disabled={busy || Boolean(blockedReason) || !instruction.trim()}
         >
-          {busy ? "Updating map..." : "Apply update"}
+          {busy ? "Updating the map…" : "Update map"}
         </button>
       </div>
-      {blockedReason && <p className="pf-key-warn">{blockedReason}</p>}
+      {blockedReason && <p className="pf-warn">{blockedReason}</p>}
     </section>
   );
 }
