@@ -11,8 +11,11 @@
     "dev:server": "tsx watch server/index.ts",
     "dev:client": "vite",
     "build": "vite build",
-    "start": "NODE_ENV=production tsx server/index.ts",
+    "start": "tsx server/start.ts",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test \"tests/**/*.test.ts\"",
+    "check:lockfile": "node scripts/check-lockfile.mjs",
+    "check": "npm run check:lockfile && npm run typecheck && npm test && npm run build",
     "verify": "tsx scripts/verify-extract.ts",
     "verify:live": "tsx scripts/verify-live.ts",
     "postinstall": "npm rebuild better-sqlite3"

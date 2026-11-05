@@ -31,7 +31,12 @@ extractRouter.post("/", demoModeGuard, upload.array("files"), async (req, res) =
 
     const files = (req.files as Express.Multer.File[] | undefined) ?? [];
     for (const f of files) {
-      inputs.push(await fileToInput(f));
+      try {
+        inputs.push(await fileToInput(f));
+      } catch (err) {
+        // An unreadable or unsupported upload is the caller's problem, not a server fault.
+        return res.status(400).json({ error: (err as Error).message });
+      }
     }
 
     if (inputs.length === 0) {

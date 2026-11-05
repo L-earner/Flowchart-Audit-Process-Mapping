@@ -14,6 +14,20 @@ import { parseOpsJson } from "./parse.ts";
 import { generateOpsAnthropic } from "./providers/anthropic.ts";
 import { generateOpsOpenRouter } from "./providers/openrouter.ts";
 import { compactHistory, historyTokens, type LiveSession } from "./liveSession.ts";
+import type { ChatTurn, OpsGeneration } from "./liveTypes.ts";
+
+/** Signature shared by the providers' `generateOps*` functions. */
+export type GenerateOps = (
+  model: string,
+  system: string,
+  history: ChatTurn[],
+) => Promise<OpsGeneration>;
+
+/** Route to the provider that owns `model`. */
+const defaultGenerateOps: GenerateOps = (model, system, history) =>
+  providerFor(model) === "openrouter"
+    ? generateOpsOpenRouter(model, system, history)
+    : generateOpsAnthropic(model, system, history);
 
 export interface ChunkResult {
   /** Ops the client should apply (or, for undo_last, execute via its undo stack). */
@@ -51,7 +65,10 @@ function describeOp(op: GraphOp): string {
 export async function processChunk(
   session: LiveSession,
   opts: { chunk: string; clientGraph?: ProcessGraph; model?: string },
+  /** Injection point for tests: swap the model call for a stub. */
+  deps: { generateOps?: GenerateOps } = {},
 ): Promise<ChunkResult> {
+  const generateOps = deps.generateOps ?? defaultGenerateOps;
   const notices: string[] = [];
 
   // 1. Reconcile manual edits: the client graph is the source of truth. One
@@ -88,10 +105,7 @@ export async function processChunk(
     opts.model && opts.model.trim() ? opts.model : (process.env.LLM_MODEL ?? DEFAULT_MODEL_ID);
   let generation;
   try {
-    generation =
-      providerFor(model) === "openrouter"
-        ? await generateOpsOpenRouter(model, LIVE_SYSTEM_PROMPT, session.history)
-        : await generateOpsAnthropic(model, LIVE_SYSTEM_PROMPT, session.history);
+    generation = await generateOps(model, LIVE_SYSTEM_PROMPT, session.history);
   } catch (err) {
     session.history.pop();
     throw err;
