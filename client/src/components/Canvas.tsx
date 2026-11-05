@@ -43,6 +43,8 @@ interface CanvasProps {
    * the view is toggled — not on ordinary edits, so the camera stays put.
    */
   fitKey: number;
+  /** Bump `seq` to pan/zoom the camera onto a step (e.g. from the Open points list). */
+  focusRequest?: { nodeId: string; seq: number } | null;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string | null) => void;
   onSelectEdge: (edgeId: string | null) => void;
@@ -65,6 +67,7 @@ export default function Canvas({
   graph,
   viewMode,
   fitKey,
+  focusRequest,
   selectedNodeId,
   onSelectNode,
   onSelectEdge,
@@ -251,6 +254,7 @@ export default function Canvas({
         proOptions={{ hideAttribution: true }}
       >
         <AutoFrame laid={laid} viewMode={viewMode} fitKey={fitKey} />
+        <FocusNode laid={laid} request={focusRequest ?? null} />
         {viewMode === "swimlane" && <LaneRail lanes={laid.lanes} />}
         <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} color="#d7dbe4" />
         <Controls fitViewOptions={{ padding: 0.08, minZoom: 0.05, maxZoom: 1 }} />
@@ -382,4 +386,29 @@ function LaneRail({ lanes }: { lanes: Lane[] }) {
       })}
     </div>
   );
+}
+
+/** Centre the camera on a requested step at a readable zoom. */
+function FocusNode({
+  laid,
+  request,
+}: {
+  laid: LayoutResult;
+  request: { nodeId: string; seq: number } | null;
+}) {
+  const { setCenter, getZoom } = useReactFlow();
+  const done = useRef<number | null>(null);
+  useEffect(() => {
+    if (!request || done.current === request.seq) return;
+    const node = laid.nodes.find((n) => n.id === request.nodeId);
+    if (!node) return;
+    done.current = request.seq;
+    const box = layoutBounds({ nodes: [node], edges: [], lanes: [] });
+    if (!box) return;
+    void setCenter(box.x + box.width / 2, box.y + box.height / 2, {
+      zoom: Math.max(getZoom(), 0.85),
+      duration: 350,
+    });
+  }, [request, laid, setCenter, getZoom]);
+  return null;
 }

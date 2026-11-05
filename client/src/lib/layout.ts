@@ -5,6 +5,16 @@ import type { ProcessGraph, ProcessNode, ViewMode } from "../types";
 export interface ProcessNodeData extends Record<string, unknown> {
   node: ProcessNode;
   actorName?: string;
+  /** How many open points reference this step (drives the "?" flag). */
+  openPoints?: number;
+}
+
+function openPointCounts(graph: ProcessGraph): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const p of graph.openPoints ?? []) {
+    if (p.nodeId) counts.set(p.nodeId, (counts.get(p.nodeId) ?? 0) + 1);
+  }
+  return counts;
 }
 
 export type RFNode = Node<ProcessNodeData>;
@@ -311,6 +321,7 @@ function layoutFlowchart(graph: ProcessGraph): LayoutResult {
   g.setDefaultEdgeLabel(() => ({}));
 
   const actorName = new Map(graph.actors.map((a) => [a.id, a.name]));
+  const openCount = openPointCounts(graph);
   for (const n of graph.nodes) g.setNode(n.id, sizeFor(n.type));
   for (const e of graph.edges) g.setEdge(e.source, e.target);
   dagre.layout(g);
@@ -322,7 +333,11 @@ function layoutFlowchart(graph: ProcessGraph): LayoutResult {
       id: n.id,
       type: rfNodeType(n.type),
       position: n.position ?? { x: pos.x - width / 2, y: pos.y - height / 2 },
-      data: { node: n, actorName: n.actorId ? actorName.get(n.actorId) : undefined },
+      data: {
+        node: n,
+        actorName: n.actorId ? actorName.get(n.actorId) : undefined,
+        openPoints: openCount.get(n.id) ?? 0,
+      },
     };
   }));
 
@@ -341,6 +356,7 @@ function layoutSwimlane(graph: ProcessGraph): LayoutResult {
 
   const laneIndex = new Map(laneIds.map((id, i) => [id, i]));
   const actorName = new Map(graph.actors.map((a) => [a.id, a.name]));
+  const openCount = openPointCounts(graph);
   const laneHeights = laneIds.map((id) => {
     const maxNodeHeight = graph.nodes
       .filter((node) => (node.actorId ?? "__unassigned__") === id)
@@ -381,7 +397,11 @@ function layoutSwimlane(graph: ProcessGraph): LayoutResult {
           laneTop + laneHeight - height - LANE_VERTICAL_PADDING,
         ),
       },
-      data: { node: n, actorName: n.actorId ? actorName.get(n.actorId) : undefined },
+      data: {
+        node: n,
+        actorName: n.actorId ? actorName.get(n.actorId) : undefined,
+        openPoints: openCount.get(n.id) ?? 0,
+      },
     };
   });
 

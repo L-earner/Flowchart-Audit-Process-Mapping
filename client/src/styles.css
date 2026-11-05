@@ -1519,3 +1519,210 @@ textarea:focus-visible {
     width: min(290px, calc(100vw - 32px));
   }
 }
+
+/* ---- open points (gaps / ambiguities / assumptions) ---- */
+.pf-open-flag {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 2;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-radius: 10px;
+  background: #fff7ed;
+  border: 1.5px solid #fb923c;
+  color: #c2410c;
+  font-size: 11.5px;
+  font-weight: 800;
+  box-shadow: var(--shadow-sm);
+  pointer-events: auto;
+}
+.pf-open-flag small {
+  font-size: 9.5px;
+  font-weight: 700;
+}
+.pf-decision-wrap .pf-open-flag {
+  top: 14px;
+  right: 14px;
+}
+.pf-open-points {
+  margin: 4px 0 18px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.pf-open-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.pf-open-head h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pf-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: #c2410c;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  padding: 0 7px;
+}
+.pf-small-button {
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--ink);
+  cursor: pointer;
+}
+.pf-small-button:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.pf-open-points ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pf-open-points li {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 9px 10px;
+  background: var(--surface);
+}
+.pf-open-points li.active {
+  border-color: #fdba74;
+  background: #fffaf5;
+}
+.pf-open-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.pf-open-kind {
+  flex: none;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.pf-open-kind.gap {
+  color: #9a3412;
+  background: #ffedd5;
+}
+.pf-open-kind.ambiguity {
+  color: #6d28d9;
+  background: #ede9fe;
+}
+.pf-open-kind.assumption {
+  color: #0f766e;
+  background: #ccfbf1;
+}
+.pf-open-step {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--accent-ink);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.pf-open-step.whole {
+  color: var(--muted);
+  text-decoration: none;
+  cursor: default;
+}
+.pf-open-issue {
+  margin: 6px 0 4px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.pf-open-question {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.pf-open-question strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.pf-open-resolve {
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.pf-open-resolve:hover {
+  color: var(--success);
+}
+.pf-source-quote,
+.pf-inspector-points {
+  margin: 10px 0 4px;
+  padding: 9px 10px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+}
+.pf-source-quote {
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent-border);
+}
+.pf-inspector-points {
+  background: #fff7ed;
+  border-left: 3px solid #fdba74;
+}
+.pf-source-quote > span,
+.pf-inspector-points > span {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.pf-source-quote blockquote {
+  margin: 0;
+  font-style: italic;
+  line-height: 1.45;
+  color: var(--ink);
+}
+.pf-inspector-points ul {
+  margin: 0;
+  padding-left: 16px;
+  line-height: 1.4;
+}
+.pf-open-points ul {
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 2px;
+}

@@ -24,6 +24,7 @@ export default function NodeInspector({
   onPatchControl,
   onDelete,
 }: NodeInspectorProps) {
+  const nodePoints = (graph.openPoints ?? []).filter((p) => p.nodeId === node.id);
   return (
     <div className="pf-inspector">
       <div className="pf-inspector-head">
@@ -63,6 +64,24 @@ export default function NodeInspector({
           </option>
         ))}
       </select>
+
+      {node.source && (
+        <div className="pf-source-quote">
+          <span>From the source</span>
+          <blockquote>“{node.source}”</blockquote>
+        </div>
+      )}
+
+      {nodePoints.length > 0 && (
+        <div className="pf-inspector-points">
+          <span>Open {nodePoints.length === 1 ? "point" : "points"} on this step</span>
+          <ul>
+            {nodePoints.map((p) => (
+              <li key={p.id}>{p.question}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <label>Description</label>
       <textarea

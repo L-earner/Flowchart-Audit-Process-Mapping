@@ -5,6 +5,7 @@ import type { ProcessGraph } from "../types";
 import { flowOrder } from "./flowOrder";
 import { assignControlIds } from "./controlIds";
 import { buildRcm, downloadBlob, fileSlug, type RcmRow } from "./rcm";
+import { KIND_LABEL, orderedOpenPoints } from "./openPoints";
 
 export interface NarrativeStep {
   number: number;
@@ -18,6 +19,7 @@ export interface Narrative {
   participants: Array<{ name: string; steps: number; controls: number }>;
   steps: NarrativeStep[];
   controls: RcmRow[];
+  openPoints: Array<{ kind: string; step: string; issue: string; question: string }>;
 }
 
 const sentence = (s: string) => {
@@ -109,6 +111,12 @@ export function buildNarrative(input: ProcessGraph): Narrative {
     participants,
     steps,
     controls: buildRcm(graph),
+    openPoints: orderedOpenPoints(graph).map((p) => ({
+      kind: KIND_LABEL[p.kind],
+      step: p.nodeId && number.has(p.nodeId) ? `${number.get(p.nodeId)}. ${byId.get(p.nodeId)!.label}` : "Whole process",
+      issue: p.issue,
+      question: p.question,
+    })),
   };
 }
 
@@ -123,6 +131,10 @@ export function narrativeToText(n: Narrative): string {
   lines.push("", "Key controls:");
   if (!n.controls.length) lines.push("- None mapped.");
   for (const c of n.controls) lines.push(`- ${c.controlId} ${c.control} — ${c.owner}; ${c.controlType}; ${c.frequency}. Risk: ${c.risk}`);
+  if (n.openPoints.length) {
+    lines.push("", "Open points to confirm:");
+    for (const p of n.openPoints) lines.push(`- [${p.kind}] ${p.step}: ${p.issue} Ask: ${p.question}`);
+  }
   return lines.join("\n");
 }
 
@@ -181,6 +193,20 @@ export async function exportNarrativeDocx(graph: ProcessGraph) {
           [800, 2400, 1600, 1600, 2600],
         )
       : new d.Paragraph("No control points are mapped in this process yet."),
+    ...(n.openPoints.length
+      ? [
+          new d.Paragraph({
+            heading: d.HeadingLevel.HEADING_1,
+            children: [new d.TextRun("Open points to confirm")],
+            spacing: { before: 320 },
+          }),
+          table(
+            ["Type", "Step", "Issue", "Question for the process owner"],
+            n.openPoints.map((p) => [p.kind, p.step, p.issue, p.question]),
+            [1200, 2000, 2900, 2900],
+          ),
+        ]
+      : []),
     new d.Paragraph({
       spacing: { before: 360 },
       children: [

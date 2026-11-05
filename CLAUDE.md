@@ -78,6 +78,14 @@ code fences / extracts the outermost `{…}`, then `validateProcessGraph`).
 The audit-grade system prompt (actors → lanes, decisions, optional **control points with the risk
 each addresses**) lives in `lib/prompts.ts` and is shared by both providers.
 
+**Evidence + open points (extraction/refine only).** `PROCESS_GRAPH_SCHEMA` asks for an optional `source` per
+node (short **verbatim** quote from the material) and a required `openPoints` list (`gap` / `ambiguity` /
+`assumption`, each with `issue`, a follow-up `question` for the process owner, and `nodeId` or null). The guidance
+is `REVIEW_GUIDELINES` in `prompts.ts`, appended to `SYSTEM_PROMPT` only — **not** to `CORE_GUIDELINES`, because
+live mode emits ops that carry neither (and the live prompt is a cache prefix). `normalizeProcessGraph` tidies open
+points (drops empties, nulls references to deleted steps). Older graphs simply have no `openPoints`; the UI hides
+the panel for them. `npm run verify` now also checks quotes are verbatim and prints the open points.
+
 - `lib/documents.ts` — maps an uploaded file to an `ExtractInput`: PDF → document block,
   `.docx` → text via `mammoth`, text/* → text, images → image block.
 - `routes/extract.ts` — `POST /api/extract` (multipart: `text` + `files`), `POST /api/extract/refine` (JSON, used by the RefinePanel's full-graph update).
@@ -147,6 +155,11 @@ small **graph operations** (`shared/graphOps.ts`: `GraphOp`, `LIVE_OPS_SCHEMA`,
     lazy-loaded).
   - `lib/importJson.ts` — header **Import** accepts the JSON export (bare graph) or `{ graph, viewMode }`.
   - `lib/exportImage.ts` — PNG renders the full map at 100% regardless of camera.
+- `components/OpenPointsPanel.tsx` + `lib/openPoints.ts` — the open points log (ordered by process, "Copy
+  questions" as a numbered list for the process owner, "Mark resolved" = undoable removal, step links pan the
+  canvas via Canvas's `focusRequest`). Steps with open points get a "?" flag; the inspector shows the source quote.
+  Open points also go into the Word narrative and a third "Open points" sheet (with a blank Response column) in the
+  RCM workbook.
 - `App.tsx` — orchestrates state, extraction, view toggle, editing, save/load, import/export.
 
 ## Conventions / gotchas

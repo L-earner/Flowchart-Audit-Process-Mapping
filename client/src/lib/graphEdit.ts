@@ -114,6 +114,22 @@ export function deleteNode(graph: ProcessGraph, nodeId: string): ProcessGraph {
     ...graph,
     nodes: graph.nodes.filter((n) => n.id !== nodeId),
     edges: graph.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+    // Open points about a deleted step become points about the whole process.
+    ...(graph.openPoints
+      ? {
+          openPoints: graph.openPoints.map((p) =>
+            p.nodeId === nodeId ? { ...p, nodeId: null } : p,
+          ),
+        }
+      : {}),
+  };
+}
+
+/** Mark an open point as resolved (removes it; undo brings it back). */
+export function resolveOpenPoint(graph: ProcessGraph, pointId: string): ProcessGraph {
+  return {
+    ...graph,
+    openPoints: (graph.openPoints ?? []).filter((p) => p.id !== pointId),
   };
 }
 

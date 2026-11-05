@@ -97,12 +97,23 @@ function EditableLabel({
   );
 }
 
+/** Small "?" marker on steps that have open points to confirm. */
+function OpenPointFlag({ count }: { count?: number }) {
+  if (!count) return null;
+  return (
+    <span className="pf-open-flag" title={`${count} open point${count === 1 ? "" : "s"} to confirm — see Open points`}>
+      ?{count > 1 ? <small>{count}</small> : null}
+    </span>
+  );
+}
+
 export function StepNode({ data, selected }: NodeProps) {
-  const { node, actorName } = data as ProcessNodeData;
+  const { node, actorName, openPoints } = data as ProcessNodeData;
   const isSystem = node.type === "system";
   return (
     <div className={`pf-node pf-step ${isSystem ? "pf-system" : ""} ${selected ? "pf-selected" : ""}`}>
       <Handles />
+      <OpenPointFlag count={openPoints} />
       {isSystem && <span className="pf-node-kind">System</span>}
       <EditableLabel nodeId={node.id} label={node.label} />
       {actorName && <div className="pf-actor">{actorName}</div>}
@@ -111,20 +122,22 @@ export function StepNode({ data, selected }: NodeProps) {
 }
 
 export function TerminalNode({ data, selected }: NodeProps) {
-  const { node } = data as ProcessNodeData;
+  const { node, openPoints } = data as ProcessNodeData;
   return (
     <div className={`pf-node pf-terminal pf-terminal-${node.type} ${selected ? "pf-selected" : ""}`}>
       <Handles />
+      <OpenPointFlag count={openPoints} />
       <EditableLabel nodeId={node.id} label={node.label} />
     </div>
   );
 }
 
 export function DecisionNode({ data, selected }: NodeProps) {
-  const { node, actorName } = data as ProcessNodeData;
+  const { node, actorName, openPoints } = data as ProcessNodeData;
   return (
     <div className={`pf-decision-wrap ${selected ? "pf-selected" : ""}`}>
       <Handles />
+      <OpenPointFlag count={openPoints} />
       <div className="pf-decision">
         <EditableLabel nodeId={node.id} label={node.label} />
       </div>
@@ -134,11 +147,12 @@ export function DecisionNode({ data, selected }: NodeProps) {
 }
 
 export function ControlNode({ data, selected }: NodeProps) {
-  const { node, actorName } = data as ProcessNodeData;
+  const { node, actorName, openPoints } = data as ProcessNodeData;
   const ctrl = node.control;
   return (
     <div className={`pf-node pf-control ${selected ? "pf-selected" : ""}`}>
       <Handles />
+      <OpenPointFlag count={openPoints} />
       <div className="pf-control-badge">
         <svg width="10" height="11" viewBox="0 0 10 11" fill="currentColor" aria-hidden="true">
           <path d="M5 0 9.5 1.8v3.1c0 2.7-1.9 4.8-4.5 6.1C2.4 9.7.5 7.6.5 4.9V1.8L5 0z" />

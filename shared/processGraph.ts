@@ -52,6 +52,11 @@ export interface ProcessNode {
   description?: string;
   /** Present when type === "control". */
   control?: ControlInfo;
+  /**
+   * Short verbatim quote from the walkthrough material that supports this
+   * step, so a reviewer can trace every box back to its evidence.
+   */
+  source?: string;
   /** Canvas position; populated by layout/editing, not by extraction. */
   position?: { x: number; y: number };
 }
@@ -64,12 +69,33 @@ export interface ProcessEdge {
   label?: string;
 }
 
+export type OpenPointKind = "gap" | "ambiguity" | "assumption";
+
+export const OPEN_POINT_KINDS: OpenPointKind[] = ["gap", "ambiguity", "assumption"];
+
+/**
+ * Something the auditor should confirm with the process owner: a gap the
+ * material doesn't cover, an ambiguity in it, or an assumption the model made.
+ */
+export interface OpenPoint {
+  id: string;
+  kind: OpenPointKind;
+  /** What is missing or unclear. */
+  issue: string;
+  /** The follow-up question to put to the process owner. */
+  question: string;
+  /** The step it concerns, or null for the process as a whole. */
+  nodeId: string | null;
+}
+
 export interface ProcessGraph {
   title: string;
   summary?: string;
   actors: Actor[];
   nodes: ProcessNode[];
   edges: ProcessEdge[];
+  /** Open points log produced by extraction (optional; older graphs have none). */
+  openPoints?: OpenPoint[];
 }
 
 export type ViewMode = "flowchart" | "swimlane";
@@ -85,6 +111,11 @@ const DEFAULT_CONTROL_INFO: ControlInfo = {
  */
 export function normalizeProcessGraph(graph: ProcessGraph): ProcessGraph {
   if (!graph || !Array.isArray(graph.nodes)) return graph;
+
+  const tidiedPoints = normalizeOpenPoints(graph);
+  if (tidiedPoints !== graph.openPoints) {
+    graph = { ...graph, openPoints: tidiedPoints };
+  }
 
   let changed = false;
   const nodes = graph.nodes.map((node) => {
@@ -122,6 +153,48 @@ export function normalizeProcessGraph(graph: ProcessGraph): ProcessGraph {
   });
 
   return changed ? { ...graph, nodes } : graph;
+}
+
+/**
+ * Drop malformed open points, default unknown kinds to "gap", give missing
+ * ids, and null out references to steps that no longer exist (e.g. deleted on
+ * the canvas). Returns the original array when nothing changes.
+ */
+function normalizeOpenPoints(graph: ProcessGraph): OpenPoint[] | undefined {
+  const points = graph.openPoints as unknown;
+  if (points === undefined) return undefined;
+  if (!Array.isArray(points)) return [];
+  const nodeIds = new Set(graph.nodes.map((n) => n?.id));
+  const usedIds = new Set<string>();
+  let changed = false;
+  const out: OpenPoint[] = [];
+  for (const [index, raw] of points.entries()) {
+    const p = raw as Partial<OpenPoint> | null;
+    const issue = typeof p?.issue === "string" ? p.issue.trim() : "";
+    const question = typeof p?.question === "string" ? p.question.trim() : "";
+    if (!issue && !question) {
+      changed = true;
+      continue;
+    }
+    let id = typeof p?.id === "string" && p.id.trim() ? p.id : `op_${index + 1}`;
+    while (usedIds.has(id)) id = `${id}_`;
+    usedIds.add(id);
+    const kind = OPEN_POINT_KINDS.includes(p?.kind as OpenPointKind) ? (p!.kind as OpenPointKind) : "gap";
+    const nodeId = typeof p?.nodeId === "string" && nodeIds.has(p.nodeId) ? p.nodeId : null;
+    const next: OpenPoint = { id, kind, issue: issue || question, question: question || issue, nodeId };
+    if (
+      !p ||
+      next.id !== p.id ||
+      next.kind !== p.kind ||
+      next.issue !== p.issue ||
+      next.question !== p.question ||
+      next.nodeId !== p.nodeId
+    ) {
+      changed = true;
+    }
+    out.push(changed ? next : (p as OpenPoint));
+  }
+  return changed ? out : (points as OpenPoint[]);
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +268,11 @@ export const PROCESS_GRAPH_SCHEMA = {
             ...CONTROL_INFO_SCHEMA,
             description: "Only for type 'control'.",
           },
+          source: {
+            type: "string",
+            description:
+              "Short verbatim quote (max ~25 words) from the material that supports this step. Copy exactly; omit if the material has no text for it.",
+          },
         },
         required: ["id", "type", "label", "actorId"],
         additionalProperties: false,
@@ -217,8 +295,31 @@ export const PROCESS_GRAPH_SCHEMA = {
         additionalProperties: false,
       },
     },
+    openPoints: {
+      type: "array",
+      description:
+        "Open points for the auditor to confirm with the process owner: gaps, ambiguities, and assumptions you made. Empty if there are none.",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "Stable slug, e.g. 'op_payment_approval'." },
+          kind: { type: "string", enum: OPEN_POINT_KINDS },
+          issue: { type: "string", description: "What is missing, unclear, or assumed (one sentence)." },
+          question: {
+            type: "string",
+            description: "A specific follow-up question to ask the process owner.",
+          },
+          nodeId: {
+            type: ["string", "null"],
+            description: "id of the step this concerns, or null for the process as a whole.",
+          },
+        },
+        required: ["id", "kind", "issue", "question", "nodeId"],
+        additionalProperties: false,
+      },
+    },
   },
-  required: ["title", "actors", "nodes", "edges"],
+  required: ["title", "actors", "nodes", "edges", "openPoints"],
   additionalProperties: false,
 } as const;
 
