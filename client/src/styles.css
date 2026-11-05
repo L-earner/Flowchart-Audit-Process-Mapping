@@ -1430,3 +1430,92 @@ textarea:focus-visible {
     flex-wrap: wrap;
   }
 }
+
+/* ---- control reference badge ---- */
+.pf-control-ref {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 5px;
+  padding: 0 5px;
+}
+
+/* ---- export menu + import ---- */
+.pf-menu {
+  position: relative;
+}
+.pf-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 50;
+  width: 290px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+}
+.pf-menu-group {
+  padding: 8px 10px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.pf-header-actions .pf-menu-list button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  padding: 7px 10px;
+  text-align: left;
+  border-radius: 6px;
+}
+.pf-header-actions .pf-menu-list button:hover {
+  background: var(--accent-soft);
+  border-color: transparent;
+  box-shadow: none;
+}
+.pf-menu-list small {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.pf-import-button {
+  position: relative;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.pf-import-button:hover,
+.pf-import-button:focus-within {
+  background: #fff;
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.pf-import-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+}
+@media (max-width: 860px) {
+  .pf-menu-list {
+    left: 0;
+    right: auto;
+    width: min(290px, calc(100vw - 32px));
+  }
+}

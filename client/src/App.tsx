@@ -24,6 +24,9 @@ import * as api from "./lib/api";
 import * as edit from "./lib/graphEdit";
 import { applyOps, summarizeOps } from "@shared/graphOps.ts";
 import { exportJson, exportPng } from "./lib/exportImage";
+import { assignControlIds } from "./lib/controlIds";
+import { parseImportedDiagram } from "./lib/importJson";
+import ExportMenu from "./components/ExportMenu";
 import {
   createTranscriber,
   isLiveSupported,
@@ -162,8 +165,11 @@ export default function App() {
     ((provider === "anthropic" && !healthInfo.hasAnthropicKey) ||
       (provider === "openrouter" && !healthInfo.hasOpenRouterKey));
 
-  const update = useCallback((next: ProcessGraph) => {
+  const update = useCallback((proposed: ProcessGraph) => {
     const current = graphRef.current;
+    // Every edit path (canvas, inspector, AI update, live ops) funnels through
+    // here, so this one call keeps control references stable everywhere.
+    const next = assignControlIds(proposed, current);
     if (current && current !== next) {
       setUndoStack((entries) => [
         ...entries.slice(-(MAX_UNDO_ENTRIES - 1)),
@@ -250,7 +256,7 @@ export default function App() {
     setError(null);
     try {
       const g = await api.extract({ ...opts, model });
-      setGraph(g);
+      setGraph(assignControlIds(g));
       setUndoStack([]);
       setRedoStack([]);
       setRefineNote(null);
@@ -475,7 +481,7 @@ export default function App() {
     setError(null);
     try {
       const d = await api.loadDiagram(id);
-      setGraph(d.graph);
+      setGraph(assignControlIds(d.graph));
       setUndoStack([]);
       setRedoStack([]);
       setRefineNote(null);
@@ -489,6 +495,28 @@ export default function App() {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleImportFile(file: File) {
+    if (dirty && !window.confirm("Discard unsaved changes and open the imported map?")) {
+      return;
+    }
+    setError(null);
+    try {
+      const imported = parseImportedDiagram(await file.text());
+      setGraph(assignControlIds(imported.graph));
+      setViewMode(imported.viewMode ?? viewMode);
+      setUndoStack([]);
+      setRedoStack([]);
+      setRefineNote(null);
+      setDiagramId(null);
+      setDirty(true);
+      setSelectedId(null);
+      setSelectedEdgeId(null);
+      reframe();
+    } catch (e) {
+      setError((e as Error).message);
     }
   }
 
@@ -602,13 +630,28 @@ export default function App() {
                   {diagramId ? (dirty ? "Save" : "Saved") : "Save"}
                 </button>
               )}
-              <button onClick={() => exportPng(graph, viewMode).catch((e) => setError(e.message))}>
-                PNG
-              </button>
-              <button onClick={() => exportJson(graph)}>JSON</button>
-              {!demoMode && <button onClick={handleNew}>New</button>}
+              <ExportMenu
+                graph={graph}
+                viewMode={viewMode}
+                onError={setError}
+                onExportPng={() => exportPng(graph, viewMode)}
+                onExportJson={() => exportJson(graph)}
+              />
             </>
           )}
+          <label className="pf-import-button" title="Open a process map exported as JSON">
+            Import
+            <input
+              type="file"
+              accept="application/json,.json"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) void handleImportFile(file);
+              }}
+            />
+          </label>
+          {graph && !demoMode && <button onClick={handleNew}>New</button>}
         </div>
       </header>
 

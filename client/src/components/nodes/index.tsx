@@ -144,6 +144,7 @@ export function ControlNode({ data, selected }: NodeProps) {
           <path d="M5 0 9.5 1.8v3.1c0 2.7-1.9 4.8-4.5 6.1C2.4 9.7.5 7.6.5 4.9V1.8L5 0z" />
         </svg>
         Control
+        {ctrl?.controlId && <span className="pf-control-ref">{ctrl.controlId}</span>}
       </div>
       <EditableLabel nodeId={node.id} label={node.label} />
       {ctrl && (
