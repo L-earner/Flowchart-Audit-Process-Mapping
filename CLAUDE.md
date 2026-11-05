@@ -15,11 +15,18 @@ editable process-flow diagram on a canvas, for audit teams. Greenfield, runs on 
 - `npm run dev:server` / `npm run dev:client` — run either half alone.
 - `npm run build` — Vite builds the client to `dist/`.
 - `npm start` — production: serves the built `dist/` + API from Express on :3001.
-- `npm run typecheck` — `tsc --noEmit` over server, client, shared, scripts.
+- `npm run typecheck` — `tsc --noEmit` over server, client, shared, scripts, tests.
+- `npm test` — offline test suite (`node:test` via `tsx --test`, files in `tests/`). **Needs no API keys**: the
+  API tests mount `createApp()` on an ephemeral port with `DB_PATH=:memory:`, and the live-pipeline tests inject a
+  stub model via `processChunk(session, opts, { generateOps })`.
+- `npm run check:lockfile` — fails if `package-lock.json` pins packages to a private mirror (see gotchas).
+- `npm run check` — everything CI runs: lockfile check, typecheck, tests, build.
 - `npm run verify` — end-to-end extraction check against a fixture transcript.
 - `npm run verify:live` — end-to-end live-mode check: replays the fixture in chunks through the incremental-ops pipeline (plus voice-command, undo, manual-edit, and compaction tests).
 
-Both verify scripts **require the API key for the selected provider** (default model → `ANTHROPIC_API_KEY`); `LLM_MODEL=<id>` overrides the model. Run them when extraction, prompts, schemas, parsing, or providers change. Before submitting changes, run `npm run typecheck && npm run build`.
+Both verify scripts **require the API key for the selected provider** (default model → `ANTHROPIC_API_KEY`); `LLM_MODEL=<id>` overrides the model. Run them when extraction, prompts, schemas, parsing, or providers change. Before submitting changes, run `npm run check`
+(GitHub Actions runs the same steps on Ubuntu and Windows for every push to `main` and every PR —
+`.github/workflows/ci.yml`).
 
 Replit run button uses `npm run build && npm start` (single port 3001 → external 80).
 
@@ -75,7 +82,9 @@ each addresses**) lives in `lib/prompts.ts` and is shared by both providers.
   `.docx` → text via `mammoth`, text/* → text, images → image block.
 - `routes/extract.ts` — `POST /api/extract` (multipart: `text` + `files`), `POST /api/extract/refine` (JSON, used by the RefinePanel's full-graph update).
 - `routes/diagrams.ts` + `db.ts` — diagram CRUD over `better-sqlite3` (`diagrams.db`, gitignored).
-- `index.ts` — wires routes, serves `dist/` in production.
+- `app.ts` — `createApp()` wires routes (unknown `/api/*` → JSON 404) and serves `dist/` when built; it does not
+  listen, so tests can mount it. `index.ts` listens on `PORT`; `start.ts` is the production entry (`npm start`),
+  which sets `NODE_ENV` in code so it works in Windows shells too.
 
 **Live mode (incremental ops).** The Live tab does NOT use refine. The model emits
 small **graph operations** (`shared/graphOps.ts`: `GraphOp`, `LIVE_OPS_SCHEMA`,
@@ -129,6 +138,10 @@ small **graph operations** (`shared/graphOps.ts`: `GraphOp`, `LIVE_OPS_SCHEMA`,
   double quotes, semicolons) and rely on `npm run typecheck`.
 - Node positions are view-specific: toggling flowchart ⇄ swimlane clears stored positions
   (`clearPositions`) so the new view auto-lays out.
+- **Lockfile is registry-agnostic.** `.npmrc` sets `omit-lockfile-registry-resolved=true`, so `package-lock.json`
+  carries no `resolved` URLs and `npm ci` works against whatever registry is configured (public npm, Replit's
+  mirror, a corporate proxy). Previously every entry pointed at `package-firewall.replit.local`, which broke installs
+  anywhere but Replit. If `npm run check:lockfile` fails, run `npm install --package-lock-only` and commit.
 - `better-sqlite3` is a native module; a `postinstall` script (`npm rebuild better-sqlite3`)
   rebuilds it after install so it matches the running Node version.
 - The Anthropic SDK must stay recent enough to type adaptive thinking + `output_config`

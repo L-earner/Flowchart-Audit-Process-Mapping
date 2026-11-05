@@ -8,6 +8,7 @@ This is a Node.js 22 TypeScript application with a React/Vite client and an Expr
 - `server/`: Express entry point, API routes, SQLite persistence, document parsing, and LLM providers.
 - `shared/`: contracts used by both runtimes. `shared/processGraph.ts` is the canonical graph type, JSON schema, and runtime validator.
 - `scripts/`: manual verification tooling and fixtures.
+- `tests/`: offline `node:test` suite (no API keys); `tests/helpers.ts` holds shared fixtures.
 - `dist/`: generated client build; do not commit it.
 
 Keep provider-specific behavior in `server/lib/providers/`. Add shared graph fields and validation together so client, server, and stored data do not drift.
@@ -18,11 +19,13 @@ Keep provider-specific behavior in `server/lib/providers/`. Add shared graph fie
 - `npm run dev`: start Express on port 3001 and Vite on port 5173.
 - `npm run dev:server` / `npm run dev:client`: run one side independently.
 - `npm run typecheck`: run strict TypeScript checks without emitting files.
+- `npm test`: run the offline test suite in `tests/` (no API keys needed).
+- `npm run check`: lockfile check + typecheck + tests + build — the same steps CI runs.
 - `npm run build`: build the client into `dist/`.
 - `npm start`: serve the API and built client in production mode.
 - `npm run verify`: run the fixture-based extraction check. Set the API key required by `LLM_MODEL`.
 
-Before submitting changes, run `npm run typecheck && npm run build`. Run `npm run verify` when extraction, prompts, schemas, parsing, or providers change.
+Before submitting changes, run `npm run check`. Run `npm run verify` when extraction, prompts, schemas, parsing, or providers change.
 
 ## Coding Style & Naming Conventions
 
@@ -32,10 +35,12 @@ Use `@shared/*` for shared imports. Server-side relative TypeScript imports must
 
 ## Testing Guidelines
 
-There is currently no unit-test framework or coverage threshold. Treat `scripts/verify-extract.ts` as an integration check and place reusable inputs under `scripts/fixtures/`. New deterministic logic should include focused tests if a test runner is introduced; otherwise extend verification scripts with explicit pass/fail assertions.
+Unit and API tests use Node's built-in `node:test` runner through `tsx --test` — no extra framework. Add files as `tests/<area>.test.ts`. Tests must not need network access or API keys: mount `createApp()` from `server/app.ts` on port 0 with `DB_PATH=:memory:` (set before importing), and pass a stub `generateOps` as the third argument of `processChunk` for live-mode logic. New deterministic logic should come with focused tests.
+
+`scripts/verify-extract.ts` and `scripts/verify-live.ts` remain the real-model integration checks; place reusable inputs under `scripts/fixtures/`.
 
 ## Commit & Pull Request Guidelines
 
 History uses short, imperative subjects such as `Add OpenRouter provider + open-source model support`. Keep commits focused and avoid generated files, databases, or secrets.
 
-Pull requests should explain the user-visible change, list verification commands, link relevant issues, and include screenshots for UI or diagram-layout changes. Document new environment variables in `.env.example`; never commit `.env`, API keys, or `*.db` files.
+CI (`.github/workflows/ci.yml`) runs `npm run check`'s steps on Ubuntu and Windows for every PR. Pull requests should explain the user-visible change, list verification commands, link relevant issues, and include screenshots for UI or diagram-layout changes. Document new environment variables in `.env.example`; never commit `.env`, API keys, or `*.db` files.
