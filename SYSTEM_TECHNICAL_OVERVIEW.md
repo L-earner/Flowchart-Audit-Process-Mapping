@@ -15,7 +15,7 @@ Supported inputs:
 - JPEG, PNG, GIF, and WebP images
 - Live speech in browsers supporting the Web Speech API
 
-PDF support currently requires an Anthropic model. Image support depends on the
+PDF support currently requires a Gemini model. Image support depends on the
 selected model.
 
 ## 2. Current Architecture
@@ -25,7 +25,7 @@ selected model.
 | Browser client | React 18, TypeScript, Vite | User interface and application state |
 | Diagram canvas | React Flow and Dagre | Diagram rendering, editing, and automatic layout |
 | Application server | Node.js 20 and Express | REST API, uploads, validation, and static file hosting |
-| AI integration | Anthropic SDK or OpenRouter API | Process extraction and diagram refinement |
+| AI integration | Google Gemini API (`@google/genai`) or OpenRouter API | Process extraction and diagram refinement |
 | Persistence | SQLite through `better-sqlite3` | Stores diagram metadata and graph JSON |
 | Shared contract | TypeScript and JSON Schema | Defines and validates the process graph |
 
@@ -79,7 +79,7 @@ Configuration:
 | `PORT` | No | Server port; default `3001` |
 | `DB_PATH` | No | SQLite file location; default `./diagrams.db` |
 | `LLM_MODEL` | No | Default model when a request does not select one |
-| `ANTHROPIC_API_KEY` | Current provider only | Credential for Anthropic models |
+| `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) | Current provider only | Credential for Google Gemini models |
 | `OPENROUTER_API_KEY` | Current provider only | Credential for OpenRouter models |
 
 ## 4. Main API Interfaces
@@ -106,7 +106,7 @@ Versions below are resolved by the current `package-lock.json`.
 | React Flow | 12.11.0 | Interactive diagram canvas | MIT |
 | Dagre | 1.1.8 | Automatic graph layout | MIT |
 | better-sqlite3 | 11.10.0 | SQLite database access; native module | MIT |
-| Anthropic SDK | 0.102.0 | Current Anthropic integration | MIT |
+| Google Gen AI SDK (`@google/genai`) | 2.32.0 | Gemini integration | Apache-2.0 |
 | Multer | 2.1.1 | Multipart file uploads | MIT |
 | Mammoth | 1.12.0 | Word document text extraction | BSD-2-Clause |
 | html-to-image | 1.11.13 | PNG diagram export | MIT |
@@ -120,7 +120,7 @@ SBOM before production approval.
 ## 6. Proposed Bank Deployment
 
 The intended internal deployment is a private AWS environment. Public
-Anthropic and OpenRouter calls should be replaced by a provider adapter for the
+Gemini and OpenRouter calls should be replaced by a provider adapter for the
 bank's approved AWS Bedrock API endpoints. Bedrock access should use an IAM
 role, private networking, an approved AWS Region and model, and no static AWS
 credentials in source code or configuration files.

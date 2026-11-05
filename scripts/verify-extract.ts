@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { extractGraph } from "../server/lib/llm.ts";
 import { validateProcessGraph } from "../shared/processGraph.ts";
 import { DEFAULT_MODEL_ID, providerFor } from "../shared/models.ts";
+import { geminiApiKey } from "../server/lib/providers/gemini.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -14,8 +15,9 @@ async function main() {
   // Model can be overridden: `LLM_MODEL=deepseek/deepseek-chat npm run verify`.
   const model = process.env.LLM_MODEL ?? DEFAULT_MODEL_ID;
   const provider = providerFor(model);
-  const needKey = provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY";
-  if (!process.env[needKey]) {
+  const needKey = provider === "openrouter" ? "OPENROUTER_API_KEY" : "GEMINI_API_KEY";
+  const hasKey = provider === "openrouter" ? Boolean(process.env.OPENROUTER_API_KEY) : Boolean(geminiApiKey());
+  if (!hasKey) {
     console.error(`✗ ${needKey} is not set (needed for model "${model}"). Set it and re-run.`);
     process.exit(2);
   }

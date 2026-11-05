@@ -2,7 +2,7 @@ import type { ProcessGraph } from "@shared/processGraph.ts";
 import { DEFAULT_MODEL_ID, providerFor } from "@shared/models.ts";
 import type { ExtractInput } from "./inputs.ts";
 import { SYSTEM_PROMPT, REFINE_ADDENDUM } from "./prompts.ts";
-import { generateGraphAnthropic } from "./providers/anthropic.ts";
+import { generateGraphGemini } from "./providers/gemini.ts";
 import { generateGraphOpenRouter } from "./providers/openrouter.ts";
 
 function resolveModel(modelId?: string): string {
@@ -16,7 +16,7 @@ async function generate(
 ): Promise<ProcessGraph> {
   return providerFor(model) === "openrouter"
     ? generateGraphOpenRouter(model, system, inputs)
-    : generateGraphAnthropic(model, system, inputs);
+    : generateGraphGemini(model, system, inputs);
 }
 
 /** Extract a fresh process graph from one or more inputs. */

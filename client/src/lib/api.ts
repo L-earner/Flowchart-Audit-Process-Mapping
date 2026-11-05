@@ -91,7 +91,7 @@ export async function liveEnd(sessionId: string): Promise<void> {
 
 export interface Health {
   ok: boolean;
-  hasAnthropicKey: boolean;
+  hasGeminiKey: boolean;
   hasOpenRouterKey: boolean;
   demoMode: boolean;
 }

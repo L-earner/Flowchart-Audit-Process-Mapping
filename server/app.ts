@@ -6,6 +6,7 @@ import { extractRouter } from "./routes/extract.ts";
 import { diagramsRouter } from "./routes/diagrams.ts";
 import { liveRouter } from "./routes/live.ts";
 import { isDemoMode } from "./lib/demoMode.ts";
+import { geminiApiKey } from "./lib/providers/gemini.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -20,7 +21,7 @@ export function createApp(opts: { serveClient?: boolean } = {}) {
   app.get("/api/health", (_req, res) => {
     res.json({
       ok: true,
-      hasAnthropicKey: Boolean(process.env.ANTHROPIC_API_KEY),
+      hasGeminiKey: Boolean(geminiApiKey()),
       hasOpenRouterKey: Boolean(process.env.OPENROUTER_API_KEY),
       demoMode: isDemoMode(),
     });

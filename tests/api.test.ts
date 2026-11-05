@@ -10,7 +10,8 @@ import { sampleGraph, tinyGraph } from "./helpers.ts";
 // db.ts opens the database at import time, so configure it before importing.
 process.env.DB_PATH = ":memory:";
 delete process.env.DEMO_MODE;
-delete process.env.ANTHROPIC_API_KEY;
+delete process.env.GEMINI_API_KEY;
+delete process.env.GOOGLE_API_KEY;
 delete process.env.OPENROUTER_API_KEY;
 const { createApp } = await import("../server/app.ts");
 
@@ -42,7 +43,7 @@ test("GET /api/health reports key and demo status", async () => {
   assert.equal(res.status, 200);
   assert.deepEqual(res.body, {
     ok: true,
-    hasAnthropicKey: false,
+    hasGeminiKey: false,
     hasOpenRouterKey: false,
     demoMode: false,
   });
@@ -109,9 +110,9 @@ test("extract with an unsupported upload is a 400, not a server error", async ()
 });
 
 test("extract without an API key explains which key is missing", async () => {
-  const res = await call("POST", "/api/extract", { text: "The clerk posts the invoice.", model: "claude-sonnet-4-6" });
+  const res = await call("POST", "/api/extract", { text: "The clerk posts the invoice.", model: "gemini-3.8-flash" });
   assert.equal(res.status, 500);
-  assert.match(res.body.error, /ANTHROPIC_API_KEY is not set/);
+  assert.match(res.body.error, /GEMINI_API_KEY is not set/);
 });
 
 test("refine validates its inputs before calling a model", async () => {
