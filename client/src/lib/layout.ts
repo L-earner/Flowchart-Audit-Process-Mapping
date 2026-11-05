@@ -43,8 +43,8 @@ function sizeFor(type: ProcessNode["type"]): NodeSize {
 }
 
 const FLOW_NODE_GAP = 30;
-const LANE_NODE_GAP = 55;
-const LANE_VERTICAL_PADDING = 35;
+const LANE_NODE_GAP = 36;
+const LANE_VERTICAL_PADDING = 22;
 
 function rfNodeType(t: ProcessNode["type"]): string {
   if (t === "decision") return "decision";
@@ -307,7 +307,7 @@ function resolveFlowchartCollisions(nodes: RFNode[]): RFNode[] {
 
 function layoutFlowchart(graph: ProcessGraph): LayoutResult {
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "TB", nodesep: 80, ranksep: 110 });
+  g.setGraph({ rankdir: "TB", nodesep: 70, ranksep: 80 });
   g.setDefaultEdgeLabel(() => ({}));
 
   const actorName = new Map(graph.actors.map((a) => [a.id, a.name]));
@@ -329,7 +329,8 @@ function layoutFlowchart(graph: ProcessGraph): LayoutResult {
   return { nodes, edges: buildEdges(graph, boxesFromNodes(nodes), "TB"), lanes: [] };
 }
 
-const LANE_LABEL_OFFSET = 180;
+/** Width of the lane-name column at the left edge of every swimlane. */
+export const LANE_LABEL_OFFSET = 180;
 
 function layoutSwimlane(graph: ProcessGraph): LayoutResult {
   // Determine lane order: actors in declared order, plus an "unassigned" lane
@@ -347,7 +348,7 @@ function layoutSwimlane(graph: ProcessGraph): LayoutResult {
         (height, node) => Math.max(height, sizeFor(node.type).height),
         0,
       );
-    return Math.max(170, maxNodeHeight + LANE_VERTICAL_PADDING * 2);
+    return Math.max(150, maxNodeHeight + LANE_VERTICAL_PADDING * 2);
   });
   const laneTops = laneHeights.map((_, index) =>
     laneHeights.slice(0, index).reduce((sum, height) => sum + height, 0),
@@ -355,7 +356,7 @@ function layoutSwimlane(graph: ProcessGraph): LayoutResult {
 
   // Use dagre LR purely to get the horizontal (flow) ordering / x positions.
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "LR", nodesep: 50, ranksep: 110, marginx: 40 });
+  g.setGraph({ rankdir: "LR", nodesep: 40, ranksep: 60, marginx: 20 });
   g.setDefaultEdgeLabel(() => ({}));
   for (const n of graph.nodes) g.setNode(n.id, sizeFor(n.type));
   for (const e of graph.edges) g.setEdge(e.source, e.target);
@@ -436,6 +437,48 @@ function layoutSwimlane(graph: ProcessGraph): LayoutResult {
     edges: buildEdges(graph, boxesFromNodes(stepNodes), "LR"),
     lanes,
   };
+}
+
+/** Axis-aligned bounds of a laid-out diagram (lanes included), in flow coordinates. */
+export interface Bounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Bounds of everything layout() placed, computed from the layout's own node
+ * sizes — so the viewport can be framed before React Flow measures the DOM.
+ */
+export function layoutBounds(result: LayoutResult): Bounds | null {
+  let x1 = Infinity;
+  let y1 = Infinity;
+  let x2 = -Infinity;
+  let y2 = -Infinity;
+  for (const n of result.nodes) {
+    const lane = n.id.startsWith("lane__")
+      ? (n.data as unknown as { laneWidth: number; laneHeight: number })
+      : null;
+    const { width, height } = lane
+      ? { width: lane.laneWidth, height: lane.laneHeight }
+      : sizeFor(n.data.node.type);
+    x1 = Math.min(x1, n.position.x);
+    y1 = Math.min(y1, n.position.y);
+    x2 = Math.max(x2, n.position.x + width);
+    y2 = Math.max(y2, n.position.y + height);
+  }
+  if (!Number.isFinite(x1)) return null;
+  return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 };
+}
+
+/** Centre of the process's first start node (falls back to the first node). */
+export function flowAnchor(result: LayoutResult): { x: number; y: number } | null {
+  const steps = result.nodes.filter((n) => !n.id.startsWith("lane__"));
+  const start = steps.find((n) => n.data.node.type === "start") ?? steps[0];
+  if (!start) return null;
+  const { width, height } = sizeFor(start.data.node.type);
+  return { x: start.position.x + width / 2, y: start.position.y + height / 2 };
 }
 
 export function layout(graph: ProcessGraph, mode: ViewMode): LayoutResult {

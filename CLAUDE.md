@@ -119,6 +119,12 @@ small **graph operations** (`shared/graphOps.ts`: `GraphOp`, `LIVE_OPS_SCHEMA`,
   nodes** (ids prefixed `lane__`, non-interactive) so they pan/zoom with the content.
 - `components/Canvas.tsx` — the React Flow canvas; persists node-drag positions and new
   connections back to the graph. Custom node types in `components/nodes/`.
+  **Camera framing:** there is no React Flow `fitView` on mount. `AutoFrame` frames the view whenever the
+  `fitKey` prop changes (App bumps it on load, extract, and view toggle — not on edits) using
+  `lib/viewport.ts` `readableViewport()`: fit the whole map only if the zoom stays ≥ 0.7, otherwise open at a
+  readable zoom (0.85, or 0.65 on phone-width panes) on the lane names / start node. "Fit entire map" still
+  shows everything. **`LaneRail`** pins lane names to the left edge when the in-diagram label column scrolls
+  away or gets tiny; it sits outside `.react-flow__viewport`, so PNG export doesn't include it.
 - `components/InputPanel.tsx` — Paste / Upload / Live tabs.
 - `components/NodeInspector.tsx` — edit the selected node (label, type, actor, control details).
 - `lib/liveTranscribe.ts` — Web Speech API wrapper for the Live tab (Chrome/Edge only);

@@ -12,6 +12,8 @@ import {
   applyNodeChanges,
   reconnectEdge,
   ConnectionMode,
+  useReactFlow,
+  useStore,
   type Connection,
   type Edge,
   type NodeChange,
@@ -19,13 +21,28 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import type { NodeType, ProcessGraph, ViewMode } from "../types";
-import { layout, type RFNode } from "../lib/layout";
+import {
+  layout,
+  layoutBounds,
+  flowAnchor,
+  LANE_LABEL_OFFSET,
+  type Lane,
+  type LayoutResult,
+  type RFNode,
+} from "../lib/layout";
+import { readableViewport } from "../lib/viewport";
 import { nodeTypes } from "./nodes";
 import { NodeEditContext } from "./nodes/nodeEditContext";
 
 interface CanvasProps {
   graph: ProcessGraph;
   viewMode: ViewMode;
+  /**
+   * Changing this re-frames the camera (readable zoom on the start of the
+   * process). The parent bumps it when a different map is loaded/extracted or
+   * the view is toggled — not on ordinary edits, so the camera stays put.
+   */
+  fitKey: number;
   selectedNodeId: string | null;
   onSelectNode: (nodeId: string | null) => void;
   onSelectEdge: (edgeId: string | null) => void;
@@ -47,6 +64,7 @@ interface CanvasProps {
 export default function Canvas({
   graph,
   viewMode,
+  fitKey,
   selectedNodeId,
   onSelectNode,
   onSelectEdge,
@@ -230,10 +248,10 @@ export default function Canvas({
         connectionMode={ConnectionMode.Loose}
         minZoom={0.05}
         maxZoom={2}
-        fitView
-        fitViewOptions={{ padding: 0.08, minZoom: 0.05, maxZoom: 1 }}
         proOptions={{ hideAttribution: true }}
       >
+        <AutoFrame laid={laid} viewMode={viewMode} fitKey={fitKey} />
+        {viewMode === "swimlane" && <LaneRail lanes={laid.lanes} />}
         <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} color="#d7dbe4" />
         <Controls fitViewOptions={{ padding: 0.08, minZoom: 0.05, maxZoom: 1 }} />
         <MiniMap
@@ -294,5 +312,74 @@ export default function Canvas({
       </ReactFlow>
     </div>
     </NodeEditContext.Provider>
+  );
+}
+
+/**
+ * Frames the camera whenever `fitKey` changes (and on first mount): the whole
+ * map if it fits legibly, otherwise a readable zoom on the start of the flow.
+ * Uses layout()'s own sizes, so it doesn't wait for DOM measurement.
+ */
+function AutoFrame({
+  laid,
+  viewMode,
+  fitKey,
+}: {
+  laid: LayoutResult;
+  viewMode: ViewMode;
+  fitKey: number;
+}) {
+  const { setViewport } = useReactFlow();
+  const width = useStore((s) => s.width);
+  const height = useStore((s) => s.height);
+  const framed = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!width || !height || framed.current === fitKey) return;
+    const bounds = layoutBounds(laid);
+    if (!bounds) return;
+    framed.current = fitKey;
+    const { x, y, zoom } = readableViewport(
+      bounds,
+      { width, height },
+      viewMode,
+      flowAnchor(laid),
+    );
+    void setViewport({ x, y, zoom });
+  }, [fitKey, laid, viewMode, width, height, setViewport]);
+
+  return null;
+}
+
+const RAIL_WIDTH = 132;
+
+/**
+ * Lane names pinned to the left edge of the canvas. The lane labels inside the
+ * diagram scroll away when you pan right or get tiny when zoomed out; this
+ * rail appears in exactly those cases so you always know which lane is which.
+ * It lives outside the React Flow viewport, so PNG export is unaffected.
+ */
+function LaneRail({ lanes }: { lanes: Lane[] }) {
+  const [tx, ty, zoom] = useStore((s) => s.transform);
+  // Hidden while the in-diagram label column is on screen and legible.
+  const labelColumnVisible = tx + LANE_LABEL_OFFSET * zoom >= RAIL_WIDTH;
+  if (!lanes.length || (labelColumnVisible && zoom >= 0.6)) return null;
+  // pointer-events: none (CSS) — clicks and drags pass through to nodes beneath.
+  return (
+    <div className="pf-lane-rail" aria-hidden="true">
+      {lanes.map((lane, i) => {
+        const top = ty + lane.y * zoom;
+        const h = lane.height * zoom;
+        return (
+          <div
+            key={lane.actorId}
+            className={`pf-lane-rail-item ${i % 2 === 1 ? "alt" : ""}`}
+            style={{ top, height: h }}
+          >
+            <span>{lane.name}</span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
