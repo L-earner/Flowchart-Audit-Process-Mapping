@@ -83,6 +83,9 @@ export default function App() {
     return stored && modelInfo(stored) ? stored : DEFAULT_MODEL_ID;
   });
   const [healthInfo, setHealthInfo] = useState<Health | null>(null);
+  /** Bumped when a different map appears or the view changes: re-frames the canvas. */
+  const [fitKey, setFitKey] = useState(0);
+  const reframe = useCallback(() => setFitKey((k) => k + 1), []);
 
   // ----- live mode -----
   const liveSupported = isLiveSupported();
@@ -255,6 +258,7 @@ export default function App() {
       setDirty(true);
       setSelectedId(null);
       setSelectedEdgeId(null);
+      reframe();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -435,6 +439,7 @@ export default function App() {
   function changeView(mode: ViewMode) {
     if (graph && mode !== viewMode) update(edit.clearPositions(graph));
     setViewMode(mode);
+    reframe();
   }
 
   // ----- persistence -----
@@ -479,6 +484,7 @@ export default function App() {
       setDirty(false);
       setSelectedId(null);
       setSelectedEdgeId(null);
+      reframe();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -596,7 +602,7 @@ export default function App() {
                   {diagramId ? (dirty ? "Save" : "Saved") : "Save"}
                 </button>
               )}
-              <button onClick={() => exportPng(graph).catch((e) => setError(e.message))}>
+              <button onClick={() => exportPng(graph, viewMode).catch((e) => setError(e.message))}>
                 PNG
               </button>
               <button onClick={() => exportJson(graph)}>JSON</button>
@@ -745,6 +751,7 @@ export default function App() {
             <Canvas
               graph={graph}
               viewMode={viewMode}
+              fitKey={fitKey}
               selectedNodeId={selectedId}
               onSelectNode={setSelectedId}
               onSelectEdge={setSelectedEdgeId}
@@ -849,7 +856,7 @@ export default function App() {
                   >
                     Try a sample walkthrough
                   </button>
-                  <div className="pf-empty-alt">or use the panel on the left to start</div>
+                  <div className="pf-empty-alt">or use the panel <span className="pf-only-wide">on the left</span><span className="pf-only-narrow">below</span> to start</div>
                 </>
               )}
             </div>
