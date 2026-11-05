@@ -11,6 +11,7 @@ import { createSession, historyTokens } from "../server/lib/liveSession.ts";
 import { processChunk } from "../server/lib/liveOps.ts";
 import { validateProcessGraph, type ProcessGraph } from "../shared/processGraph.ts";
 import { DEFAULT_MODEL_ID, providerFor } from "../shared/models.ts";
+import { geminiApiKey } from "../server/lib/providers/gemini.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -23,8 +24,9 @@ function check(name: string, pass: boolean) {
 async function main() {
   const model = process.env.LLM_MODEL ?? DEFAULT_MODEL_ID;
   const provider = providerFor(model);
-  const needKey = provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY";
-  if (!process.env[needKey]) {
+  const needKey = provider === "openrouter" ? "OPENROUTER_API_KEY" : "GEMINI_API_KEY";
+  const hasKey = provider === "openrouter" ? Boolean(process.env.OPENROUTER_API_KEY) : Boolean(geminiApiKey());
+  if (!hasKey) {
     console.error(`✗ ${needKey} is not set (needed for model "${model}"). Set it and re-run.`);
     process.exit(2);
   }

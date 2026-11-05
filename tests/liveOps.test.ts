@@ -36,13 +36,13 @@ test("applies the model's ops and records them as the assistant turn", async () 
       ],
     },
   ]);
-  const result = await processChunk(session, { chunk: "then the clerk checks it", model: "claude-sonnet-4-6" }, { generateOps });
+  const result = await processChunk(session, { chunk: "then the clerk checks it", model: "gemini-3.8-flash" }, { generateOps });
 
   assert.equal(result.version, 1);
   assert.equal(result.ops.length, 2);
   assert.deepEqual(result.rejected, []);
   assert.ok(result.graph.nodes.some((n) => n.id === "check"));
-  assert.equal(calls[0].model, "claude-sonnet-4-6");
+  assert.equal(calls[0].model, "gemini-3.8-flash");
   assert.match(calls[0].history.at(-1)!.text, /Transcript: then the clerk checks it/);
   const last = session.history.at(-1)!;
   assert.equal(last.role, "assistant");

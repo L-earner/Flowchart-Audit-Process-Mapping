@@ -23,7 +23,7 @@ Keep provider-specific behavior in `server/lib/providers/`. Add shared graph fie
 - `npm run check`: lockfile check + typecheck + tests + build — the same steps CI runs.
 - `npm run build`: build the client into `dist/`.
 - `npm start`: serve the API and built client in production mode.
-- `npm run verify`: run the fixture-based extraction check. Set the API key required by `LLM_MODEL`.
+- `npm run verify`: run the fixture-based extraction check. Needs `GEMINI_API_KEY` for the default model (or the key for the provider of `LLM_MODEL`).
 
 Before submitting changes, run `npm run check`. Run `npm run verify` when extraction, prompts, schemas, parsing, or providers change.
 
@@ -35,7 +35,7 @@ Use `@shared/*` for shared imports. Server-side relative TypeScript imports must
 
 ## Testing Guidelines
 
-Unit and API tests use Node's built-in `node:test` runner through `tsx --test` — no extra framework. Add files as `tests/<area>.test.ts`. Tests must not need network access or API keys: mount `createApp()` from `server/app.ts` on port 0 with `DB_PATH=:memory:` (set before importing), and pass a stub `generateOps` as the third argument of `processChunk` for live-mode logic. New deterministic logic should come with focused tests.
+Unit and API tests use Node's built-in `node:test` runner through `tsx --test` — no extra framework. Add files as `tests/<area>.test.ts`. Tests must not need network access or API keys: mount `createApp()` from `server/app.ts` on port 0 with `DB_PATH=:memory:` (set before importing), and pass a stub `generateOps` as the third argument of `processChunk` for live-mode logic. Gemini provider tests point the real SDK at a local fake server via `GEMINI_BASE_URL` (see `tests/gemini.test.ts`). New deterministic logic should come with focused tests.
 
 `scripts/verify-extract.ts` and `scripts/verify-live.ts` remain the real-model integration checks; place reusable inputs under `scripts/fixtures/`.
 

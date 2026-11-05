@@ -11,7 +11,7 @@ import { normalizeProcessGraph, type ProcessGraph } from "@shared/processGraph.t
 import { DEFAULT_MODEL_ID, providerFor } from "@shared/models.ts";
 import { LIVE_SYSTEM_PROMPT } from "./prompts.ts";
 import { parseOpsJson } from "./parse.ts";
-import { generateOpsAnthropic } from "./providers/anthropic.ts";
+import { generateOpsGemini } from "./providers/gemini.ts";
 import { generateOpsOpenRouter } from "./providers/openrouter.ts";
 import { compactHistory, historyTokens, type LiveSession } from "./liveSession.ts";
 import type { ChatTurn, OpsGeneration } from "./liveTypes.ts";
@@ -27,7 +27,7 @@ export type GenerateOps = (
 const defaultGenerateOps: GenerateOps = (model, system, history) =>
   providerFor(model) === "openrouter"
     ? generateOpsOpenRouter(model, system, history)
-    : generateOpsAnthropic(model, system, history);
+    : generateOpsGemini(model, system, history);
 
 export interface ChunkResult {
   /** Ops the client should apply (or, for undo_last, execute via its undo stack). */

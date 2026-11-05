@@ -72,7 +72,7 @@ export interface LiveOpsPayload {
 // ---------------------------------------------------------------------------
 // JSON Schema for structured output. A single flat op object (only `op`
 // required) rather than a discriminated union — it behaves identically on
-// Anthropic output_config.format and OpenRouter response_format json_schema
+// Gemini responseJsonSchema and OpenRouter response_format json_schema
 // (strict:false), and open models handle it far better than a 12-way oneOf.
 // Semantic validation (do the ids exist, are required fields present) happens
 // in applyOps regardless.

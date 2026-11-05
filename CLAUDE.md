@@ -24,7 +24,7 @@ editable process-flow diagram on a canvas, for audit teams. Greenfield, runs on 
 - `npm run verify` — end-to-end extraction check against a fixture transcript.
 - `npm run verify:live` — end-to-end live-mode check: replays the fixture in chunks through the incremental-ops pipeline (plus voice-command, undo, manual-edit, and compaction tests).
 
-Both verify scripts **require the API key for the selected provider** (default model → `ANTHROPIC_API_KEY`); `LLM_MODEL=<id>` overrides the model. Run them when extraction, prompts, schemas, parsing, or providers change. Before submitting changes, run `npm run check`
+Both verify scripts **require the API key for the selected provider** (default model → `GEMINI_API_KEY`); `LLM_MODEL=<id>` overrides the model. Run them when extraction, prompts, schemas, parsing, or providers change. Before submitting changes, run `npm run check`
 (GitHub Actions runs the same steps on Ubuntu and Windows for every push to `main` and every PR —
 `.github/workflows/ci.yml`).
 
@@ -35,11 +35,12 @@ Replit run button uses `npm run build && npm start` (single port 3001 → extern
 Extraction runs through a **selectable model** (picker in the UI sidebar). You need a key
 for whichever provider the chosen model belongs to:
 
-- `ANTHROPIC_API_KEY` — for Claude models (`claude-opus-4-8`, `claude-sonnet-4-6`).
+- `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) — for Google Gemini models (`gemini-3.8-flash` default, `gemini-4-argon`,
+  `gemini-3.5-flash-lite`). Keys come from Google AI Studio (aistudio.google.com/apikey).
 - `OPENROUTER_API_KEY` — for models via OpenRouter (OpenAI GPT / gpt-oss, DeepSeek, Llama, Qwen, Mistral).
 
 Set as Replit secrets or in `.env` (see `.env.example`). `/api/health` reports
-`hasAnthropicKey` / `hasOpenRouterKey`. `LLM_MODEL` sets the default model when the request
+`hasGeminiKey` / `hasOpenRouterKey`. `LLM_MODEL` sets the default model when the request
 doesn't specify one; `DB_PATH` overrides the SQLite location.
 
 `DEMO_MODE=true` puts the server in public read-only demo mode: `demoModeGuard`
@@ -51,7 +52,7 @@ live start/chunk, regardless of whether API keys are set.
 Everything flows through a single canonical data model, **`ProcessGraph`**, defined once
 in **`shared/processGraph.ts`** along with its JSON Schema (`PROCESS_GRAPH_SCHEMA`):
 
-- **Claude emits it** via structured outputs (`output_config.format` + the schema).
+- **The model emits it** via structured outputs (Gemini `responseJsonSchema` / OpenRouter `json_schema` + the schema).
 - **The DB stores it** as a JSON blob.
 - **Both diagram views render from it** (flowchart and swimlane are two layouts of the same graph).
 - **On-canvas edits mutate it** (helpers in `client/src/lib/graphEdit.ts`).
@@ -65,8 +66,10 @@ the verify script.
 **Pluggable LLM providers.** The model id selects the provider (`shared/models.ts` →
 `providerFor`). All extraction goes through `lib/llm.ts` (`extractGraph(inputs, modelId?)`,
 `refineGraph(graph, chunk, modelId?)`), which dispatches to:
-- `lib/providers/anthropic.ts` — Anthropic SDK, adaptive thinking, **schema-enforced**
-  structured output (`output_config.format`). Supports text, PDF, and images.
+- `lib/providers/gemini.ts` — official `@google/genai` SDK; **schema-constrained** output
+  (`responseMimeType: application/json` + `responseJsonSchema`), model-default thinking for extraction. Supports text,
+  PDF, and images (`inlineData`). `GEMINI_BASE_URL` points the SDK at a fake server in tests — leave it unset.
+  Errors (bad key, unknown model id, 429, MAX_TOKENS, safety blocks) are mapped to actionable messages.
 - `lib/providers/openrouter.ts` — OpenAI-compatible `chat/completions` over `fetch`, using
   `response_format: json_schema`; output is also parsed and validated locally.
   Text always; images only on vision-capable models; PDFs are rejected with a clear message.
@@ -111,10 +114,10 @@ small **graph operations** (`shared/graphOps.ts`: `GraphOp`, `LIVE_OPS_SCHEMA`,
   manual canvas edits into model notices (so deleted nodes are never resurrected),
   rejected-op corrections are fed back the next turn, `applyOps` applies with per-op
   skip. The full graph JSON never enters model context — only compact notation.
-- Providers expose `generateOps*` alongside `generateGraph*`; the Anthropic path uses
-  prompt-cache breakpoints on the frozen `LIVE_SYSTEM_PROMPT` + last message, and
-  `output_config.effort: "low"` for latency (bump to "medium" if narration gets
-  under-extracted).
+- Providers expose `generateOps*` alongside `generateGraph*`; the Gemini path sends the history as
+  `user`/`model` turns with `thinkingConfig.thinkingLevel: LOW` for latency (bump to MEDIUM if narration gets
+  under-extracted). Gemini caches repeated prompt prefixes implicitly, so the frozen `LIVE_SYSTEM_PROMPT` is reused
+  without explicit breakpoints; `cachedContentTokenCount` is reported as `cacheReadInputTokens`.
 - Client (`App.tsx`): single-flight chunk sender (2.5s debounce, immediate flush over
   ~400 buffered chars); applies returned ops to the *current* graph so edits made while
   a request is in flight survive; a voice "undo that" comes back as a lone `undo_last`
@@ -176,10 +179,11 @@ small **graph operations** (`shared/graphOps.ts`: `GraphOp`, `LIVE_OPS_SCHEMA`,
   anywhere but Replit. If `npm run check:lockfile` fails, run `npm install --package-lock-only` and commit.
 - `better-sqlite3` is a native module; a `postinstall` script (`npm rebuild better-sqlite3`)
   rebuilds it after install so it matches the running Node version.
-- The Anthropic SDK must stay recent enough to type adaptive thinking + `output_config`
-  (currently `^0.102.0`); older majors (≤0.40) will not typecheck.
+- Gemini model ids change often (Google retires preview ids). If one starts returning 404, update it in
+  `shared/models.ts`; current ids are listed at ai.google.dev/gemini-api/docs/models. `@google/genai` must stay
+  recent enough to type `responseJsonSchema` and `ThinkingLevel` (currently `^2.32.0`).
 - To add/replace an OpenRouter model, edit `shared/models.ts` (`MODELS`) — set `vision: true`
   only if the model accepts images. The client picker and server routing both read this list.
 - Open models vary in JSON reliability; `parseGraphJson` is deliberately lenient. If a
   particular model returns malformed graphs often, prefer one known to support structured
-  output, or switch to a Claude model.
+  output, or switch to a Gemini model.

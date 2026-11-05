@@ -20,7 +20,7 @@ function buildParts(inputs: ExtractInput[], model: ModelInfo | undefined): Part[
     } else if (input.kind === "image") {
       if (!model?.vision) {
         throw new Error(
-          `Model "${model?.id ?? "selected"}" can't read images. Pick a vision model (e.g. Qwen2.5-VL) or the Anthropic provider.`,
+          `Model "${model?.id ?? "selected"}" can't read images. Pick a vision model (e.g. Qwen2.5-VL) or a Gemini model.`,
         );
       }
       parts.push({
@@ -29,7 +29,7 @@ function buildParts(inputs: ExtractInput[], model: ModelInfo | undefined): Part[
       });
     } else if (input.kind === "pdf") {
       throw new Error(
-        "PDF input isn't supported on OpenRouter models here. Use an Anthropic model for PDFs, or upload a .docx / text / image instead.",
+        "PDF input isn't supported on OpenRouter models here. Use a Gemini model for PDFs, or upload a .docx / text / image instead.",
       );
     }
   }
@@ -46,7 +46,7 @@ async function postChat(body: object): Promise<string> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) {
     throw new Error(
-      "OPENROUTER_API_KEY is not set. Add it as a secret (or in .env) and restart, or pick an Anthropic model.",
+      "OPENROUTER_API_KEY is not set. Add it as a secret (or in .env) and restart, or pick a Gemini model.",
     );
   }
 

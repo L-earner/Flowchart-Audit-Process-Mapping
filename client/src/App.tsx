@@ -138,7 +138,7 @@ export default function App() {
       const candidateProvider = providerFor(candidate);
       return candidateProvider === "openrouter"
         ? healthInfo.hasOpenRouterKey
-        : healthInfo.hasAnthropicKey;
+        : healthInfo.hasGeminiKey;
     };
     if (!isReady(model)) {
       const fallback = MODELS.find((candidate) => isReady(candidate.id));
@@ -164,7 +164,7 @@ export default function App() {
   const selectedModel = modelInfo(model);
   const keyMissing =
     healthInfo != null &&
-    ((provider === "anthropic" && !healthInfo.hasAnthropicKey) ||
+    ((provider === "gemini" && !healthInfo.hasGeminiKey) ||
       (provider === "openrouter" && !healthInfo.hasOpenRouterKey));
 
   const update = useCallback((proposed: ProcessGraph) => {
@@ -701,8 +701,8 @@ export default function App() {
                   value={model}
                   onChange={(e) => setModel(e.target.value)}
                 >
-                  <optgroup label="Anthropic (Claude)">
-                    {MODELS.filter((m) => m.provider === "anthropic").map((m) => (
+                  <optgroup label="Google Gemini">
+                    {MODELS.filter((m) => m.provider === "gemini").map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.label}
                       </option>
@@ -718,7 +718,7 @@ export default function App() {
                 </select>
                 {keyMissing ? (
                   <p className="pf-key-warn">
-                    ⚠ No {provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY"}{" "}
+                    ⚠ No {provider === "openrouter" ? "OPENROUTER_API_KEY" : "GEMINI_API_KEY"}{" "}
                     set — add it as a secret to use this model.
                   </p>
                 ) : (
@@ -726,17 +726,17 @@ export default function App() {
                     {selectedModel?.note ??
                       (provider === "openrouter"
                         ? "Model via OpenRouter."
-                        : "Claude with schema-enforced extraction.")}
+                        : "Gemini with schema-constrained extraction.")}
                   </p>
                 )}
               </div>
               <InputPanel
                 busy={busy}
                 supportsImages={Boolean(selectedModel?.vision)}
-                supportsPdf={provider === "anthropic"}
+                supportsPdf={provider === "gemini"}
                 blockedReason={
                   keyMissing
-                    ? `Add ${provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY"} to use this model.`
+                    ? `Add ${provider === "openrouter" ? "OPENROUTER_API_KEY" : "GEMINI_API_KEY"} to use this model.`
                     : undefined
                 }
                 onExtract={handleExtract}
@@ -754,7 +754,7 @@ export default function App() {
                   busy={busy}
                   blockedReason={
                     keyMissing
-                      ? `Add ${provider === "openrouter" ? "OPENROUTER_API_KEY" : "ANTHROPIC_API_KEY"} to update this map.`
+                      ? `Add ${provider === "openrouter" ? "OPENROUTER_API_KEY" : "GEMINI_API_KEY"} to update this map.`
                       : undefined
                   }
                   voiceSupported={liveSupported}
