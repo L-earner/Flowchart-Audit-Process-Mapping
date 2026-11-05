@@ -134,7 +134,20 @@ small **graph operations** (`shared/graphOps.ts`: `GraphOp`, `LIVE_OPS_SCHEMA`,
   as `diffGraphs` in `shared/graphOps.ts`** (which produces model notices for live mode).
 - `lib/graphQuality.ts` — `assessGraph`: heuristic quality score + warnings (start/end nodes,
   disconnected nodes, controls, decisions) surfaced in the UI.
-- `App.tsx` — orchestrates state, extraction, view toggle, editing, save/load, export.
+- **Audit outputs** (header **Export ▾** menu, `components/ExportMenu.tsx`), all generated from the graph with no
+  model call:
+  - `lib/flowOrder.ts` — `flowOrder(graph)`: steps in reading order (longest path from start, back-edges ignored,
+    end last). Control numbering, the RCM, and the narrative all use it so they agree.
+  - `lib/controlIds.ts` — `assignControlIds(graph, previous?)`: stable `control.controlId` refs (C-01…). Called in
+    App's `update()` (so every edit path, including AI refine and live ops, keeps ids) and on extract/load/import.
+    `controlId` is **not** in the model schemas — models never mint ids; `applyOps` `update_node` preserves the
+    existing id, and `renderCompactGraph` shows it so a speaker can say "remove C-02".
+  - `lib/rcm.ts` — Risk & Control Matrix rows + numbered step list; Excel (`write-excel-file`, lazy-loaded) and CSV.
+  - `lib/narrative.ts` — written narrative (numbered steps, decisions with branches, key controls) → Word (`docx`,
+    lazy-loaded).
+  - `lib/importJson.ts` — header **Import** accepts the JSON export (bare graph) or `{ graph, viewMode }`.
+  - `lib/exportImage.ts` — PNG renders the full map at 100% regardless of camera.
+- `App.tsx` — orchestrates state, extraction, view toggle, editing, save/load, import/export.
 
 ## Conventions / gotchas
 

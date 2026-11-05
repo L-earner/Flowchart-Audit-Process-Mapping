@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { ProcessGraph, ProcessNode, NodeType, ControlType } from "../types";
 import { NODE_TYPES } from "../types";
 
@@ -73,6 +74,12 @@ export default function NodeInspector({
       {node.type === "control" && (
         <div className="pf-control-edit">
           <h4>🛡 Control details</h4>
+          <label>Control ID</label>
+          <ControlIdInput
+            key={node.id}
+            value={node.control?.controlId ?? ""}
+            onCommit={(controlId) => onPatchControl({ controlId })}
+          />
           <label>Control type</label>
           <select
             value={node.control?.controlType ?? "manual"}
@@ -103,5 +110,32 @@ export default function NodeInspector({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * Edited as a draft and committed on blur/Enter: committing every keystroke
+ * would let auto-numbering refill the field the moment it's cleared.
+ */
+function ControlIdInput({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const commit = () => {
+    const next = draft.trim();
+    if (next && next !== value) onCommit(next);
+    else setDraft(value);
+  };
+  return (
+    <input
+      value={draft}
+      placeholder="e.g. C-01"
+      title="Reference used in the Risk & Control Matrix. Leave as-is to keep auto-numbering."
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Escape") setDraft(value);
+      }}
+    />
   );
 }

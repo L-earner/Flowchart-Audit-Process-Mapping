@@ -307,7 +307,12 @@ export function applyOps(graph: ProcessGraph, ops: GraphOp[]): ApplyOpsResult {
           ...(op.description !== undefined ? { description: op.description } : {}),
         };
         if (nextType === "control") {
-          next.control = op.control ?? current.control ?? DEFAULT_CONTROL;
+          // Models can't emit controlId (not in the schema), so keep the
+          // existing reference when they replace a control's details.
+          const keepId = current.control?.controlId;
+          next.control = op.control
+            ? { ...op.control, ...(keepId ? { controlId: keepId } : {}) }
+            : current.control ?? DEFAULT_CONTROL;
         } else {
           delete next.control;
         }
@@ -500,6 +505,8 @@ export function renderCompactGraph(graph: ProcessGraph): string {
   if (!graph.nodes.length) lines.push("  (none)");
   for (const n of graph.nodes) {
     const meta: string[] = [n.type];
+    // Lets the speaker refer to controls by reference ("remove C-02").
+    if (n.type === "control" && n.control?.controlId) meta.push(n.control.controlId);
     if (n.actorId) meta.push(`@${n.actorId}`);
     if (n.type === "control" && n.control) {
       meta.push(n.control.controlType);

@@ -35,6 +35,12 @@ export interface ControlInfo {
   riskAddressed: string;
   /** How often the control runs, e.g. "per transaction", "monthly". */
   frequency?: string;
+  /**
+   * Reference used in the Risk & Control Matrix, e.g. "C-03". Assigned by the
+   * client (assignControlIds), editable by the user, and deliberately NOT part
+   * of the model's output schema — models never mint or renumber these.
+   */
+  controlId?: string;
 }
 
 export interface ProcessNode {
